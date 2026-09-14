@@ -1,5 +1,5 @@
 # Defines BitShares library target.
-cmake_minimum_required( VERSION 3.2 FATAL_ERROR )
+cmake_minimum_required( VERSION 3.5 FATAL_ERROR )
 project( BitShares LANGUAGES CXX C)
 
 set( BLOCKCHAIN_NAME "Graphene" )
@@ -134,7 +134,6 @@ SET(BOOST_COMPONENTS)
 LIST(APPEND BOOST_COMPONENTS thread
                              iostreams
                              date_time
-                             system
                              filesystem
                              program_options
                              chrono
