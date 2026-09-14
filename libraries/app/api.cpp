@@ -40,6 +40,8 @@
 #include <fc/crypto/hex.hpp>
 #include <fc/rpc/api_connection.hpp>
 #include <fc/thread/future.hpp>
+#include <boost/range/iterator_range.hpp>
+#include <boost/range/distance.hpp>
 
 template class fc::api<graphene::app::block_api>;
 template class fc::api<graphene::app::network_broadcast_api>;
