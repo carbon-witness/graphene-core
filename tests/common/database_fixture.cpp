@@ -52,7 +52,8 @@
 
 using namespace graphene::chain::test;
 
-uint32_t GRAPHENE_TESTING_GENESIS_TIMESTAMP = 1431700000;
+// genesis timestamps must be divisible by the block interval (3 seconds on this chain)
+uint32_t GRAPHENE_TESTING_GENESIS_TIMESTAMP = 1431700000 / GRAPHENE_DEFAULT_BLOCK_INTERVAL * GRAPHENE_DEFAULT_BLOCK_INTERVAL;
 
 namespace graphene { namespace chain {
 
