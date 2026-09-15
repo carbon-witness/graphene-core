@@ -640,10 +640,12 @@ BOOST_FIXTURE_TEST_CASE( cli_confidential_tx_test, cli_fixture )
       W.import_balance("nathan", nathan_keys, true);
       generate_block(app1); head_block++;
 
-      // ** Block 2: Nathan will blind 100M CORE token:
+      // ** Block 2: Nathan will blind 10M CORE token:
+      // (the whole genesis supply is GRAPHENE_MAX_SHARE_SUPPLY = 100M CORE on this chain, so blinding
+      // 100M as upstream does would leave nothing to pay the transfer_to_blind fee)
       BOOST_TEST_MESSAGE("Blinding a large balance");
-      W.transfer_to_blind("nathan", GRAPHENE_SYMBOL, {{"nathan","100000000"}}, true);
-      BOOST_CHECK( W.get_blind_balances("nathan")[0].amount == 10000000000000 );
+      W.transfer_to_blind("nathan", GRAPHENE_SYMBOL, {{"nathan","10000000"}}, true);
+      BOOST_CHECK( W.get_blind_balances("nathan")[0].amount == 1000000000000 );
       generate_block(app1); head_block++;
 
       // ** Block 3: Nathan will send 1M CORE token to alice and 10K CORE token to bob. We
