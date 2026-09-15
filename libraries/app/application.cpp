@@ -977,6 +977,12 @@ application::application()
 
 application::~application()
 {
+   // Stop the RPC servers first: requests handled during shutdown would otherwise reach
+   // plugins, the P2P node or the chain database after they have been closed
+   if( my->_websocket_tls_server )
+      my->_websocket_tls_server.reset();
+   if( my->_websocket_server )
+      my->_websocket_server.reset();
    if( my->_p2p_network )
    {
       my->_p2p_network->close();
@@ -1149,12 +1155,24 @@ void graphene::app::application::add_available_plugin(std::shared_ptr<graphene::
 
 void application::shutdown_plugins()
 {
+   // Stop the RPC servers first: requests handled during shutdown would otherwise reach
+   // plugins, the P2P node or the chain database after they have been closed
+   if( my->_websocket_tls_server )
+      my->_websocket_tls_server.reset();
+   if( my->_websocket_server )
+      my->_websocket_server.reset();
    for( auto& entry : my->_active_plugins )
       entry.second->plugin_shutdown();
    return;
 }
 void application::shutdown()
 {
+   // Stop the RPC servers first: requests handled during shutdown would otherwise reach
+   // plugins, the P2P node or the chain database after they have been closed
+   if( my->_websocket_tls_server )
+      my->_websocket_tls_server.reset();
+   if( my->_websocket_server )
+      my->_websocket_server.reset();
    if( my->_p2p_network )
       my->_p2p_network->close();
    if( my->_chain_db )
