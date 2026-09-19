@@ -48,8 +48,32 @@ We recommend building on Ubuntu 26.04 LTS (64-bit). This is the only system 1.1 
     cmake -DCMAKE_BUILD_TYPE=Release ..
     make -j$(nproc) witness_node cli_wallet
 
-Run `make` without targets to build all programs and tests. For a build with full debug information, configure with
-`-DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"`.
+Run `make` without targets to build all programs and tests.
+
+**Build Script, full debug build:** same optimisation as Release plus full debug information, for running the node
+under a debugger or reading its stack traces line by line. `witness_node` grows from 27 MB to 366 MB and
+`cli_wallet` to 426 MB; sync speed is unaffected (1 h 56 min against 1 h 59 min for Release).
+
+    git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
+    cd graphene-core
+    mkdir build && cd build
+    cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG" ..
+    make -j$(nproc) witness_node cli_wallet
+
+A plain `-DCMAKE_BUILD_TYPE=Debug` builds with `-O0` and produces a noticeably slower binary; that build is not
+tested for this release.
+
+**Build Script, stripped build:** node and wallet only, symbols removed, for a small VPS or a container image.
+`strip` shrinks `witness_node` from 27 MB to 20 MB. Stack traces then print bare addresses instead of function
+names, so keep the plain Release build on a node you may need to diagnose.
+
+    git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
+    cd graphene-core
+    mkdir build && cd build
+    cmake -DCMAKE_BUILD_TYPE=Release ..
+    make -j$(nproc) witness_node cli_wallet
+    strip programs/witness_node/witness_node
+    strip programs/cli_wallet/cli_wallet
 
 **Upgrade Script** (run in an existing clone if you built a prior release):
 
