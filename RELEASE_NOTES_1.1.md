@@ -34,18 +34,31 @@ sudo apt-get install build-essential cmake git autoconf automake libtool pkg-con
 
 Compared to 1.0, `libicu-dev` and `liblzma-dev` are new: static Boost needs them at link time.
 
+**Option 1, debug build** (`witness_node` 366 MB, `cli_wallet` 426 MB): same optimisation as Release plus full debug information, for running the node under a debugger or reading its stack traces line by line. Sync speed is unaffected (1 h 56 min against 1 h 59 min for the Release build).
+
+```
+git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
+cd graphene-core && mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"
+make -j2 witness_node cli_wallet
+```
+
+A plain `-DCMAKE_BUILD_TYPE=Debug` builds with `-O0` and produces a noticeably slower binary; that build is not tested for this release.
+
+**Option 2, slim build** (`witness_node` 27 MB, 20 MB after `strip`; `cli_wallet` 33 MB before `strip`): the build to run in production, on a small VPS or in a container image. The two `strip` lines are optional. After `strip` the stack traces print bare addresses instead of function names, so skip them on a node you may need to diagnose.
+
 ```
 git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
 cd graphene-core && mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j2 witness_node cli_wallet
+strip programs/witness_node/witness_node
+strip programs/cli_wallet/cli_wallet
 ```
 
-The `libraries/fc`, `fc/vendor/websocketpp` and `fc/vendor/editline` submodules now point to the `carbon-witness` forks. In an existing clone, run `git submodule sync --recursive && git submodule update --init --recursive` after updating.
+Run `make` without targets to build all programs and tests. The compiler needs about 2–4 GB of memory per job; on machines with little RAM, add swap.
 
-For a build with full debug information:
-`cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"`.
-The compiler needs about 2–4 GB of memory per job; on machines with little RAM, add swap.
+The `libraries/fc`, `fc/vendor/websocketpp` and `fc/vendor/editline` submodules now point to the `carbon-witness` forks. In an existing clone, run `git submodule sync --recursive && git submodule update --init --recursive` after updating.
 
 ## Bug fixes
 
