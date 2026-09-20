@@ -43,8 +43,7 @@ plus full debug information, for running the node under a debugger or reading it
 speed is unaffected (1 h 56 min against 1 h 59 min for the Release build).
 
     git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
-    cd graphene-core
-    mkdir build && cd build
+    cd graphene-core && mkdir build && cd build
     cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"
     make -j2 witness_node cli_wallet
 
@@ -57,8 +56,7 @@ optional. After `strip` the stack traces print bare addresses instead of functio
 may need to diagnose.
 
     git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
-    cd graphene-core
-    mkdir build && cd build
+    cd graphene-core && mkdir build && cd build
     cmake .. -DCMAKE_BUILD_TYPE=Release
     make -j2 witness_node cli_wallet
     strip programs/witness_node/witness_node
