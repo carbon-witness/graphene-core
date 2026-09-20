@@ -40,19 +40,9 @@ We recommend building on Ubuntu 26.04 LTS (64-bit). This is the only system 1.1 
 
 `libicu-dev` and `liblzma-dev` are required to link against the static Boost libraries.
 
-**Build Script:**
-
-    git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
-    cd graphene-core
-    mkdir build && cd build
-    cmake -DCMAKE_BUILD_TYPE=Release ..
-    make -j$(nproc) witness_node cli_wallet
-
-Run `make` without targets to build all programs and tests.
-
-**Build Script, full debug build:** same optimisation as Release plus full debug information, for running the node
-under a debugger or reading its stack traces line by line. `witness_node` grows from 27 MB to 366 MB and
-`cli_wallet` to 426 MB; sync speed is unaffected (1 h 56 min against 1 h 59 min for Release).
+**Build Script, option 1, debug build** (`witness_node` 366 MB, `cli_wallet` 426 MB): same optimisation as Release
+plus full debug information, for running the node under a debugger or reading its stack traces line by line. Sync
+speed is unaffected (1 h 56 min against 1 h 59 min for the Release build).
 
     git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
     cd graphene-core
@@ -63,9 +53,10 @@ under a debugger or reading its stack traces line by line. `witness_node` grows 
 A plain `-DCMAKE_BUILD_TYPE=Debug` builds with `-O0` and produces a noticeably slower binary; that build is not
 tested for this release.
 
-**Build Script, stripped build:** node and wallet only, symbols removed, for a small VPS or a container image.
-`strip` shrinks `witness_node` from 27 MB to 20 MB. Stack traces then print bare addresses instead of function
-names, so keep the plain Release build on a node you may need to diagnose.
+**Build Script, option 2, slim build** (`witness_node` 27 MB, 20 MB after `strip`; `cli_wallet` 33 MB before
+`strip`): the build to run in production, on a small VPS or in a container image. The two `strip` lines are
+optional. After `strip` the stack traces print bare addresses instead of function names, so skip them on a node you
+may need to diagnose.
 
     git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
     cd graphene-core
@@ -74,6 +65,8 @@ names, so keep the plain Release build on a node you may need to diagnose.
     make -j$(nproc) witness_node cli_wallet
     strip programs/witness_node/witness_node
     strip programs/cli_wallet/cli_wallet
+
+Run `make` without targets to build all programs and tests.
 
 **Upgrade Script** (run in an existing clone if you built a prior release):
 
