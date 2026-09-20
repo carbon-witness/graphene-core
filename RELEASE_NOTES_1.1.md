@@ -29,9 +29,7 @@ Consensus rules, block format and serialization are unchanged.
 Ubuntu 26.04 packages:
 
 ```
-sudo apt-get install build-essential cmake git autoconf automake libtool pkg-config \
-  libboost-all-dev libssl-dev libreadline-dev zlib1g-dev libbz2-dev libcurl4-openssl-dev \
-  libzstd-dev libncurses-dev libicu-dev liblzma-dev doxygen
+sudo apt-get install build-essential cmake git autoconf automake libtool pkg-config libboost-all-dev libssl-dev libreadline-dev zlib1g-dev libbz2-dev libcurl4-openssl-dev libzstd-dev libncurses-dev libicu-dev liblzma-dev doxygen
 ```
 
 Compared to 1.0, `libicu-dev` and `liblzma-dev` are new: static Boost needs them at link time.
@@ -40,7 +38,7 @@ Compared to 1.0, `libicu-dev` and `liblzma-dev` are new: static Boost needs them
 git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
 cd graphene-core && mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc) witness_node cli_wallet
+make -j2 witness_node cli_wallet
 ```
 
 The `libraries/fc`, `fc/vendor/websocketpp` and `fc/vendor/editline` submodules now point to the `carbon-witness` forks. In an existing clone, run `git submodule sync --recursive && git submodule update --init --recursive` after updating.

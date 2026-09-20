@@ -34,9 +34,7 @@ We recommend building on Ubuntu 26.04 LTS (64-bit). This is the only system 1.1 
 **Build Dependencies**:
 
     sudo apt-get update
-    sudo apt-get install build-essential cmake git autoconf automake libtool pkg-config \
-      libboost-all-dev libssl-dev libreadline-dev zlib1g-dev libbz2-dev libcurl4-openssl-dev \
-      libzstd-dev libncurses-dev libicu-dev liblzma-dev doxygen
+    sudo apt-get install build-essential cmake git autoconf automake libtool pkg-config libboost-all-dev libssl-dev libreadline-dev zlib1g-dev libbz2-dev libcurl4-openssl-dev libzstd-dev libncurses-dev libicu-dev liblzma-dev doxygen
 
 `libicu-dev` and `liblzma-dev` are required to link against the static Boost libraries.
 
@@ -48,7 +46,7 @@ speed is unaffected (1 h 56 min against 1 h 59 min for the Release build).
     cd graphene-core
     mkdir build && cd build
     cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG" ..
-    make -j$(nproc) witness_node cli_wallet
+    make -j2 witness_node cli_wallet
 
 A plain `-DCMAKE_BUILD_TYPE=Debug` builds with `-O0` and produces a noticeably slower binary; that build is not
 tested for this release.
@@ -62,7 +60,7 @@ may need to diagnose.
     cd graphene-core
     mkdir build && cd build
     cmake -DCMAKE_BUILD_TYPE=Release ..
-    make -j$(nproc) witness_node cli_wallet
+    make -j2 witness_node cli_wallet
     strip programs/witness_node/witness_node
     strip programs/cli_wallet/cli_wallet
 
