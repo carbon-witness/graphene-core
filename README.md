@@ -45,7 +45,7 @@ speed is unaffected (1 h 56 min against 1 h 59 min for the Release build).
     git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
     cd graphene-core
     mkdir build && cd build
-    cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG" ..
+    cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"
     make -j2 witness_node cli_wallet
 
 A plain `-DCMAKE_BUILD_TYPE=Debug` builds with `-O0` and produces a noticeably slower binary; that build is not
@@ -59,7 +59,7 @@ may need to diagnose.
     git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
     cd graphene-core
     mkdir build && cd build
-    cmake -DCMAKE_BUILD_TYPE=Release ..
+    cmake .. -DCMAKE_BUILD_TYPE=Release
     make -j2 witness_node cli_wallet
     strip programs/witness_node/witness_node
     strip programs/cli_wallet/cli_wallet
@@ -83,7 +83,7 @@ newer. Older Boost releases are not tested with this version. If your system cam
 Boost that you do not wish to use, you may manually build your preferred version and use it with Graphene by
 specifying it on the CMake command line.
 
-Example: ``cmake -DBOOST_ROOT=/path/to/boost ..``
+Example: ``cmake .. -DBOOST_ROOT=/path/to/boost``
 
 **NOTE:** Graphene requires a 64-bit operating system to build, and will not build on a 32-bit OS.
 
