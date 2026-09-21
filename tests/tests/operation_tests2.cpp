@@ -1175,6 +1175,14 @@ BOOST_AUTO_TEST_CASE( worker_pay_test )
       PUSH_TX( db, trx, ~0 );
       trx.clear();
    }
+   // GRAPHENE_MAX_SHARE_SUPPLY/2 in reserve funds a daily budget that witness pay at 3 second blocks
+   // would use up completely on this chain; don't pay witnesses so that the worker gets paid.
+   // Put the pending transactions into a block first: changes made while they are pending
+   // are undone when the next block is generated.
+   generate_block();
+   db.modify( db.get_global_properties(), []( global_property_object& p ) {
+      p.parameters.witness_pay_per_block = 0;
+   } );
 
    BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
    generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
@@ -1288,6 +1296,14 @@ BOOST_AUTO_TEST_CASE( refund_worker_test )
       PUSH_TX( db, trx, ~0 );
       trx.clear();
    }
+   // GRAPHENE_MAX_SHARE_SUPPLY/2 in reserve funds a daily budget that witness pay at 3 second blocks
+   // would use up completely on this chain; don't pay witnesses so that the worker gets paid.
+   // Put the pending transactions into a block first: changes made while they are pending
+   // are undone when the next block is generated.
+   generate_block();
+   db.modify( db.get_global_properties(), []( global_property_object& p ) {
+      p.parameters.witness_pay_per_block = 0;
+   } );
 
    // auto supply = asset_id_type()(db).dynamic_data(db).current_supply;
    verify_asset_supplies(db);
@@ -1362,6 +1378,14 @@ BOOST_AUTO_TEST_CASE( burn_worker_test )
       PUSH_TX( db, trx, ~0 );
       trx.clear();
    }
+   // GRAPHENE_MAX_SHARE_SUPPLY/2 in reserve funds a daily budget that witness pay at 3 second blocks
+   // would use up completely on this chain; don't pay witnesses so that the worker gets paid.
+   // Put the pending transactions into a block first: changes made while they are pending
+   // are undone when the next block is generated.
+   generate_block();
+   db.modify( db.get_global_properties(), []( global_property_object& p ) {
+      p.parameters.witness_pay_per_block = 0;
+   } );
 
    BOOST_CHECK_EQUAL( get_balance(GRAPHENE_NULL_ACCOUNT, asset_id_type()), 0 );
    verify_asset_supplies(db);
@@ -1493,7 +1517,9 @@ BOOST_AUTO_TEST_CASE( force_settle_test )
       BOOST_TEST_MESSAGE( "Update force_settlement_delay_sec = 100, force_settlement_offset_percent = 1%" );
 
       update_bitasset_options( bitusd_id, [&]( bitasset_options& new_options )
-      { new_options.force_settlement_delay_sec = 100;
+      { // 100 seconds upstream (20 blocks of 5 seconds); keep it a whole number of blocks so that
+        // generate_blocks( settlement_date ) reaches the settlement date with 3 second blocks
+        new_options.force_settlement_delay_sec = 20 * GRAPHENE_DEFAULT_BLOCK_INTERVAL;
         new_options.force_settlement_offset_percent = GRAPHENE_1_PERCENT; } );
 
       // Force settlement is disabled; check that it fails
@@ -1819,11 +1845,12 @@ BOOST_AUTO_TEST_CASE(zero_second_vbo)
       ACTOR(alice);
       // don't pay witnesses so we have some worker budget to work with
 
-      transfer(account_id_type(), alice_id, asset(int64_t(100000) * 1100 * 1000 * 1000));
+      // scaled down 100x from upstream: GRAPHENE_MAX_SHARE_SUPPLY is 10^13 on this chain
+      transfer(account_id_type(), alice_id, asset(int64_t(1000) * 1100 * 1000 * 1000));
       {
          asset_reserve_operation op;
          op.payer = alice_id;
-         op.amount_to_reserve = asset(int64_t(100000) * 1000 * 1000 * 1000);
+         op.amount_to_reserve = asset(int64_t(1000) * 1000 * 1000 * 1000);
          transaction tx;
          tx.operations.push_back( op );
          set_expiration( db, tx );
@@ -1832,6 +1859,12 @@ BOOST_AUTO_TEST_CASE(zero_second_vbo)
       enable_fees();
       upgrade_to_lifetime_member(alice_id);
       generate_block();
+      // the reserve is 100x smaller than upstream; witness pay at 3 second blocks would use up the whole budget.
+      // Change it only now: parameter changes made while transactions are pending (like enable_fees() above)
+      // are undone when the next block is generated, and the rest of this test relies on that for fees.
+      db.modify( db.get_global_properties(), []( global_property_object& p ) {
+         p.parameters.witness_pay_per_block = 0;
+      } );
 
       // Wait for a maintenance interval to ensure we have a full day's budget to work with.
       // Otherwise we may not have enough to feed the witnesses and the worker will end up starved if we start late in the day.

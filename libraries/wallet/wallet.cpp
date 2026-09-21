@@ -89,7 +89,20 @@ namespace fc {
 }
 
 #define BRAIN_KEY_WORD_COUNT 16
-#define RANGE_PROOF_MANTISSA 49 // Minimum mantissa bits to "hide" in the range proof.
+// Minimum mantissa bits to "hide" in the range proof. All outputs use the same number of bits so that
+// the proof size does not reveal the magnitude of the amount (bitshares-core issue #480).
+// blind_transfer_operation::validate() requires 2^bits - 1 <= GRAPHENE_MAX_SHARE_SUPPLY: the 49 bits used by
+// BitShares fit its 10^15 supply, but not the 10^13 supply of this chain, so derive the value from the supply.
+static constexpr int range_proof_mantissa_bits()
+{
+   int bits = 0;
+   while( bits < 62 && ( ( int64_t(1) << ( bits + 1 ) ) - 1 ) <= GRAPHENE_MAX_SHARE_SUPPLY )
+      ++bits;
+   return bits;
+}
+#define RANGE_PROOF_MANTISSA range_proof_mantissa_bits()
+static_assert( ( ( int64_t(1) << RANGE_PROOF_MANTISSA ) - 1 ) <= GRAPHENE_MAX_SHARE_SUPPLY,
+               "range proof mantissa exceeds GRAPHENE_MAX_SHARE_SUPPLY" );
                                 // If this number is set too low, then for large value
                                 // commitments the length of the range proof will hint
                                 // strongly at the value amount that is being hidden.

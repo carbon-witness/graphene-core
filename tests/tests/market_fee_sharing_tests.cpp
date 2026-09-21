@@ -27,7 +27,8 @@ struct reward_database_fixture : database_fixture
    using whitelist_market_fee_sharing_t = fc::optional<flat_set<account_id_type>>;
 
    reward_database_fixture()
-      : database_fixture(HARDFORK_1268_TIME - 100)
+      : database_fixture( fc::time_point_sec( ( HARDFORK_1268_TIME.sec_since_epoch() - 100 )
+                                               / GRAPHENE_DEFAULT_BLOCK_INTERVAL * GRAPHENE_DEFAULT_BLOCK_INTERVAL ) )
    {
    }
 

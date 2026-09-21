@@ -1027,17 +1027,18 @@ BOOST_FIXTURE_TEST_CASE( change_block_interval, database_fixture )
    }
    BOOST_TEST_MESSAGE( "Verifying that the interval didn't change immediately" );
 
-   BOOST_CHECK_EQUAL(db.get_global_properties().parameters.block_interval, 5u);
+   // the interval is GRAPHENE_DEFAULT_BLOCK_INTERVAL (3 seconds on this chain, 5 upstream)
+   BOOST_CHECK_EQUAL(db.get_global_properties().parameters.block_interval, GRAPHENE_DEFAULT_BLOCK_INTERVAL);
    auto past_time = db.head_block_time().sec_since_epoch();
    generate_block();
-   BOOST_CHECK_EQUAL(db.head_block_time().sec_since_epoch() - past_time, 5u);
+   BOOST_CHECK_EQUAL(db.head_block_time().sec_since_epoch() - past_time, GRAPHENE_DEFAULT_BLOCK_INTERVAL);
    generate_block();
-   BOOST_CHECK_EQUAL(db.head_block_time().sec_since_epoch() - past_time, 10u);
+   BOOST_CHECK_EQUAL(db.head_block_time().sec_since_epoch() - past_time, 2u * GRAPHENE_DEFAULT_BLOCK_INTERVAL);
 
    BOOST_TEST_MESSAGE( "Generating blocks until proposal expires" );
    generate_blocks(proposal_id_type()(db).expiration_time + 5);
-   BOOST_TEST_MESSAGE( "Verify that the block interval is still 5 seconds" );
-   BOOST_CHECK_EQUAL(db.get_global_properties().parameters.block_interval, 5u);
+   BOOST_TEST_MESSAGE( "Verify that the block interval is still the default" );
+   BOOST_CHECK_EQUAL(db.get_global_properties().parameters.block_interval, GRAPHENE_DEFAULT_BLOCK_INTERVAL);
 
    BOOST_TEST_MESSAGE( "Generating blocks until next maintenance interval" );
    generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
@@ -1432,12 +1433,22 @@ BOOST_FIXTURE_TEST_CASE( miss_some_blocks, database_fixture )
    generate_block(); // witnesses[2]
    for( const auto& id : witnesses )
       BOOST_CHECK_EQUAL( 0, id(db).total_missed );
-   // generate_blocks generates another block *now* (witnesses[3])
-   // and one at now+9 blocks (witnesses[12%9])
+   // generate_blocks generates another block *now* and one at now+9 slots,
+   // i. e. the 7 slots in between are missed by the other witnesses.
+   // Which schedule positions produce the two blocks depends on how the genesis time lines up
+   // with the maintenance interval for the configured block interval, so look them up.
    generate_blocks( db.head_block_time() + db.get_global_properties().parameters.block_interval * 9, true );
-   // i. e. 7 blocks are missed in between by witness[4..11%9]
+   const witness_id_type head_witness = db.fetch_block_by_number( db.head_block_num() )->witness;
+   const witness_id_type prev_witness = db.fetch_block_by_number( db.head_block_num() - 1 )->witness;
+   BOOST_CHECK( head_witness != prev_witness );
+   uint32_t total_missed = 0;
    for( uint32_t i = 0; i < witnesses.size(); i++ )
-      BOOST_CHECK_EQUAL( (i+6) % 9 < 2 ? 0 : 1, witnesses[i](db).total_missed );
+   {
+      const bool produced = ( witnesses[i] == head_witness || witnesses[i] == prev_witness );
+      BOOST_CHECK_EQUAL( produced ? 0 : 1, witnesses[i](db).total_missed );
+      total_missed += witnesses[i](db).total_missed;
+   }
+   BOOST_CHECK_EQUAL( total_missed, 7u );
 } FC_LOG_AND_RETHROW() }
 
 BOOST_FIXTURE_TEST_CASE( miss_many_blocks, database_fixture )

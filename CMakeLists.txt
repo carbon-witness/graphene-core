@@ -1,5 +1,5 @@
 # Defines BitShares library target.
-cmake_minimum_required( VERSION 3.2 FATAL_ERROR )
+cmake_minimum_required( VERSION 3.5 FATAL_ERROR )
 project( BitShares LANGUAGES CXX C)
 
 set( BLOCKCHAIN_NAME "Graphene" )
@@ -11,6 +11,11 @@ set( INSTALLER_APP_ID "68ad7005-8eee-49c9-95ce-9eed97e5b347" )
 
 set( CMAKE_CXX_STANDARD 14 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
+
+# GCC >= 14 reports errors in uninstantiated template bodies (-Wtemplate-body)
+if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14 )
+   add_compile_options( $<$<COMPILE_LANGUAGE:CXX>:-Wno-template-body> )
+endif()
 
 if( "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" )
@@ -134,7 +139,6 @@ SET(BOOST_COMPONENTS)
 LIST(APPEND BOOST_COMPONENTS thread
                              iostreams
                              date_time
-                             system
                              filesystem
                              program_options
                              chrono
