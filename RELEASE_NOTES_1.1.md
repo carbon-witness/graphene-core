@@ -1,8 +1,8 @@
 # graphene-core 1.1
 
 **Date:** September 15, 2026
-**Branch:** `fix/modern-toolchain` ([carbon-witness/graphene-core](https://github.com/carbon-witness/graphene-core/tree/fix/modern-toolchain))
-**Commit:** `e34d05b`
+**Branch:** `graphene` ([graphene-blockchain/graphene-core](https://github.com/graphene-blockchain/graphene-core/tree/graphene))
+**Commit:** `PENDING-CORE-MERGE`
 **Previous version:** 1.0 — commit `23df6159` (May 18, 2022)
 
 ## Summary
@@ -37,7 +37,7 @@ Compared to 1.0, `libicu-dev` and `liblzma-dev` are new: static Boost needs them
 **Option 1, debug build** (`witness_node` 366 MB, `cli_wallet` 426 MB): same optimisation as Release plus full debug information, for running the node under a debugger or reading its stack traces line by line. Sync speed is unaffected (1 h 56 min against 1 h 59 min for the Release build).
 
 ```
-git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
+git clone --recurse-submodules -b graphene https://github.com/graphene-blockchain/graphene-core.git
 cd graphene-core && mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"
 make -j2 witness_node cli_wallet
@@ -48,7 +48,7 @@ A plain `-DCMAKE_BUILD_TYPE=Debug` builds with `-O0` and produces a noticeably s
 **Option 2, slim build** (`witness_node` 27 MB, 20 MB after `strip`; `cli_wallet` 33 MB before `strip`): the build to run in production, on a small VPS or in a container image. The two `strip` lines are optional. After `strip` the stack traces print bare addresses instead of function names, so skip them on a node you may need to diagnose.
 
 ```
-git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
+git clone --recurse-submodules -b graphene https://github.com/graphene-blockchain/graphene-core.git
 cd graphene-core && mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j2 witness_node cli_wallet
@@ -58,7 +58,7 @@ strip programs/cli_wallet/cli_wallet
 
 Run `make` without targets to build all programs and tests. The compiler needs about 2–4 GB of memory per job; on machines with little RAM, add swap.
 
-The `libraries/fc`, `fc/vendor/websocketpp` and `fc/vendor/editline` submodules now point to the `carbon-witness` forks. In an existing clone, run `git submodule sync --recursive && git submodule update --init --recursive` after updating.
+The `libraries/fc`, `fc/vendor/websocketpp` and `fc/vendor/editline` submodules now point to the `graphene-blockchain` forks. In an existing clone, run `git submodule sync --recursive && git submodule update --init --recursive` after updating.
 
 ## Bug fixes
 
@@ -166,33 +166,33 @@ The Release `witness_node` binary is 27 MB.
 
 | Repository | Branch | Commit |
 |---|---|---|
-| [carbon-witness/graphene-core](https://github.com/carbon-witness/graphene-core/tree/fix/modern-toolchain) | `fix/modern-toolchain` | `e34d05b` |
-| [carbon-witness/graphene-fc](https://github.com/carbon-witness/graphene-fc/tree/fix/modern-toolchain) | `fix/modern-toolchain` | `a108c38` |
-| [carbon-witness/websocketpp](https://github.com/carbon-witness/websocketpp/tree/fix/modern-toolchain) | `fix/modern-toolchain` | `c8a7a54` |
-| [carbon-witness/editline](https://github.com/carbon-witness/editline/tree/fix/modern-toolchain) | `fix/modern-toolchain` | `a92d593` |
+| [graphene-blockchain/graphene-core](https://github.com/graphene-blockchain/graphene-core/tree/graphene) | `graphene` | `PENDING-CORE-MERGE` |
+| [graphene-blockchain/graphene-fc](https://github.com/graphene-blockchain/graphene-fc/tree/graphene) | `graphene` | `f17ef47` |
+| [graphene-blockchain/websocketpp](https://github.com/graphene-blockchain/websocketpp/tree/fc) | `fc` | `571a7b0` |
+| [graphene-blockchain/editline](https://github.com/graphene-blockchain/editline/tree/graphene) | `graphene` | `224e256` |
 
 ## Commits
 
 **graphene-core**
-- [`88905cb`](https://github.com/carbon-witness/graphene-core/commit/88905cb19231c06084ac3ffea098bce3f4fbaf61) build: support CMake 4 and Boost >= 1.89
-- [`914ed91`](https://github.com/carbon-witness/graphene-core/commit/914ed91f92e1b4bf07e3cdf448c4b08c6557e2b1) build: GCC 14+ template-body errors, submodules on carbon-witness forks
-- [`343df6b`](https://github.com/carbon-witness/graphene-core/commit/343df6bf5b2beef74b48c4a0f9461f377c9516a0) fc: bump to uint128 endian buffer cast fix
-- [`091e494`](https://github.com/carbon-witness/graphene-core/commit/091e4949dc9e77ec84fd73ca2263028f642a95e0) app: include Boost.Range headers explicitly
-- [`119a45b`](https://github.com/carbon-witness/graphene-core/commit/119a45b093aba8060fb42e9da3a8135c599b0dea) fc: bump to Boost.Test static link fix
-- [`e897485`](https://github.com/carbon-witness/graphene-core/commit/e8974855804b90d03310e5e07e29c166e60f9a41) fc: bump to OpenSSL 3 DH fixes and symbolized stack traces
-- [`1702df2`](https://github.com/carbon-witness/graphene-core/commit/1702df2f73bbd47f8a85b49d5283ec000e1b45f9) app: stop RPC servers before plugins, P2P and chain database on shutdown
-- [`4d845ba`](https://github.com/carbon-witness/graphene-core/commit/4d845ba0b42218009647a6fc907141d9ebde99dc) wallet: size range proofs to GRAPHENE_MAX_SHARE_SUPPLY; fix cli_confidential_tx_test
-- [`e34d05b`](https://github.com/carbon-witness/graphene-core/commit/e34d05b422e3484aadd1d67637e616576a5460d2) tests: adapt chain_test to this chain's parameters
+- [`88905cb`](https://github.com/graphene-blockchain/graphene-core/commit/88905cb19231c06084ac3ffea098bce3f4fbaf61) build: support CMake 4 and Boost >= 1.89
+- [`914ed91`](https://github.com/graphene-blockchain/graphene-core/commit/914ed91f92e1b4bf07e3cdf448c4b08c6557e2b1) build: GCC 14+ template-body errors, submodules on graphene-blockchain forks
+- [`343df6b`](https://github.com/graphene-blockchain/graphene-core/commit/343df6bf5b2beef74b48c4a0f9461f377c9516a0) fc: bump to uint128 endian buffer cast fix
+- [`091e494`](https://github.com/graphene-blockchain/graphene-core/commit/091e4949dc9e77ec84fd73ca2263028f642a95e0) app: include Boost.Range headers explicitly
+- [`119a45b`](https://github.com/graphene-blockchain/graphene-core/commit/119a45b093aba8060fb42e9da3a8135c599b0dea) fc: bump to Boost.Test static link fix
+- [`e897485`](https://github.com/graphene-blockchain/graphene-core/commit/e8974855804b90d03310e5e07e29c166e60f9a41) fc: bump to OpenSSL 3 DH fixes and symbolized stack traces
+- [`1702df2`](https://github.com/graphene-blockchain/graphene-core/commit/1702df2f73bbd47f8a85b49d5283ec000e1b45f9) app: stop RPC servers before plugins, P2P and chain database on shutdown
+- [`4d845ba`](https://github.com/graphene-blockchain/graphene-core/commit/4d845ba0b42218009647a6fc907141d9ebde99dc) wallet: size range proofs to GRAPHENE_MAX_SHARE_SUPPLY; fix cli_confidential_tx_test
+- [`e34d05b`](https://github.com/graphene-blockchain/graphene-core/commit/e34d05b422e3484aadd1d67637e616576a5460d2) tests: adapt chain_test to this chain's parameters
 
 **graphene-fc**
-- [`a4de83e`](https://github.com/carbon-witness/graphene-fc/commit/a4de83e95594bbd1a65a54e324b1dbce83dce540) build: support Ubuntu 26.04 toolchain (GCC 15, CMake 4, Boost 1.90, OpenSSL 3.5)
-- [`37db5a8`](https://github.com/carbon-witness/graphene-fc/commit/37db5a8d7e39aba0e208029d08ced27449f18be1) raw: cast uint128 endian buffer data() to const char*
-- [`b044859`](https://github.com/carbon-witness/graphene-fc/commit/b044859318889aaf562bfb439056cf2c30ff5552) tests: fix Boost.Test build with static Boost 1.90
-- [`516266e`](https://github.com/carbon-witness/graphene-fc/commit/516266e0bc727b0d20801d99f6a6ebb009ec236d) crypto, stacktrace: OpenSSL 3 DH and symbolized stack traces
-- [`a108c38`](https://github.com/carbon-witness/graphene-fc/commit/a108c3802dd5fa061b7c2f279d363e9e5be9c0dd) websocket: fix hang and crash when a server is destroyed during requests
+- [`a4de83e`](https://github.com/graphene-blockchain/graphene-fc/commit/a4de83e95594bbd1a65a54e324b1dbce83dce540) build: support Ubuntu 26.04 toolchain (GCC 15, CMake 4, Boost 1.90, OpenSSL 3.5)
+- [`37db5a8`](https://github.com/graphene-blockchain/graphene-fc/commit/37db5a8d7e39aba0e208029d08ced27449f18be1) raw: cast uint128 endian buffer data() to const char*
+- [`b044859`](https://github.com/graphene-blockchain/graphene-fc/commit/b044859318889aaf562bfb439056cf2c30ff5552) tests: fix Boost.Test build with static Boost 1.90
+- [`516266e`](https://github.com/graphene-blockchain/graphene-fc/commit/516266e0bc727b0d20801d99f6a6ebb009ec236d) crypto, stacktrace: OpenSSL 3 DH and symbolized stack traces
+- [`a108c38`](https://github.com/graphene-blockchain/graphene-fc/commit/a108c3802dd5fa061b7c2f279d363e9e5be9c0dd) websocket: fix hang and crash when a server is destroyed during requests
 
 **websocketpp**
-- [`c8a7a54`](https://github.com/carbon-witness/websocketpp/commit/c8a7a5495c52a7f38d5cd9e492e358b186eef29b) asio: support Boost >= 1.87
+- [`c8a7a54`](https://github.com/graphene-blockchain/websocketpp/commit/c8a7a5495c52a7f38d5cd9e492e358b186eef29b) asio: support Boost >= 1.87
 
 **editline**
-- [`a92d593`](https://github.com/carbon-witness/editline/commit/a92d593a79fb3ff46949d265e9031a120a34b426) build: quote AS_IF bodies for autoconf 2.72
+- [`a92d593`](https://github.com/graphene-blockchain/editline/commit/a92d593a79fb3ff46949d265e9031a120a34b426) build: quote AS_IF bodies for autoconf 2.72

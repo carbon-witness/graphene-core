@@ -42,7 +42,7 @@ We recommend building on Ubuntu 26.04 LTS (64-bit). This is the only system 1.1 
 plus full debug information, for running the node under a debugger or reading its stack traces line by line. Sync
 speed is unaffected (1 h 56 min against 1 h 59 min for the Release build).
 
-    git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
+    git clone --recurse-submodules -b graphene https://github.com/graphene-blockchain/graphene-core.git
     cd graphene-core && mkdir build && cd build
     cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"
     make -j2 witness_node cli_wallet
@@ -55,7 +55,7 @@ tested for this release.
 optional. After `strip` the stack traces print bare addresses instead of function names, so skip them on a node you
 may need to diagnose.
 
-    git clone --recurse-submodules -b fix/modern-toolchain https://github.com/carbon-witness/graphene-core.git
+    git clone --recurse-submodules -b graphene https://github.com/graphene-blockchain/graphene-core.git
     cd graphene-core && mkdir build && cd build
     cmake .. -DCMAKE_BUILD_TYPE=Release
     make -j2 witness_node cli_wallet
@@ -66,14 +66,14 @@ Run `make` without targets to build all programs and tests.
 
 **Upgrade Script** (run in an existing clone if you built a prior release):
 
-    git remote set-url origin https://github.com/carbon-witness/graphene-core.git
+    git remote set-url origin https://github.com/graphene-blockchain/graphene-core.git
     git fetch origin
-    git checkout fix/modern-toolchain
+    git checkout graphene
     git pull
     git submodule sync --recursive
     git submodule update --init --recursive
 
-The `libraries/fc`, `fc/vendor/websocketpp` and `fc/vendor/editline` submodules now point to the `carbon-witness`
+The `libraries/fc`, `fc/vendor/websocketpp` and `fc/vendor/editline` submodules now point to the `graphene-blockchain`
 forks, so `git submodule sync --recursive` is required after upgrading.
 
 **NOTE:** Graphene 1.1 is tested with [Boost](http://www.boost.org/) 1.90 and OpenSSL 3.5. It requires CMake 3.5 or
