@@ -125,7 +125,7 @@ Commit: graphene-fc `516266e`.
 | `cli_test` | 14 / 15 | 15 / 15 |
 | `app_test` | 6 / 6 | 6 / 6 |
 
-`app_test` passes, but `two_node_network` is intermittent: `create_genesis_file` is called once per node and rounds `initial_timestamp` down to the block interval, so when the two calls fall on either side of a 3-second boundary the nodes end up with different chain ids and reject each other. The test bug predates this release; BitShares fixed it in `e74fde89` by generating one genesis file for both nodes, and the fix is to be backported separately.
+`app_test` passes, but `two_node_network` is intermittent: `create_genesis_file` is called once per node and rounds `initial_timestamp` down to the block interval, so when the two calls fall on either side of a 3-second boundary the nodes end up with different chain ids and reject each other. The test bug predates this release; the fix is one genesis file shared by both nodes.
 
 The tests were inherited from BitShares and assumed its parameters: a 5-second block interval, a share supply of 10¹⁵ and the `BTS` address prefix. In 1.1 the tests are adapted to this chain's parameters (3 seconds, 10¹³, `GPH`); only tests were changed:
 
