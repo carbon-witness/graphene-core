@@ -4,5 +4,6 @@
     ignore = dirty
 [submodule "libraries/fc"]
     path = libraries/fc
-    url = https://github.com/graphene-blockchain/graphene-fc.git
+    url = https://github.com/carbon-witness/graphene-fc.git
     ignore = dirty
+    branch = fix/1.2.0
