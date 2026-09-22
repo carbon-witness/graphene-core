@@ -2,7 +2,7 @@
 
 **Date:** September 15, 2026
 **Branch:** `graphene` ([graphene-blockchain/graphene-core](https://github.com/graphene-blockchain/graphene-core/tree/graphene))
-**Commit:** `PENDING-CORE-MERGE`
+**Tag:** `graphene-1.1`
 **Previous version:** 1.0 — commit `23df6159` (May 18, 2022)
 
 ## Summary
@@ -125,6 +125,8 @@ Commit: graphene-fc `516266e`.
 | `cli_test` | 14 / 15 | 15 / 15 |
 | `app_test` | 6 / 6 | 6 / 6 |
 
+`app_test` passes, but `two_node_network` is intermittent: `create_genesis_file` is called once per node and rounds `initial_timestamp` down to the block interval, so when the two calls fall on either side of a 3-second boundary the nodes end up with different chain ids and reject each other. The test bug predates this release; BitShares fixed it in `e74fde89` by generating one genesis file for both nodes, and the fix is to be backported separately.
+
 The tests were inherited from BitShares and assumed its parameters: a 5-second block interval, a share supply of 10¹⁵ and the `BTS` address prefix. In 1.1 the tests are adapted to this chain's parameters (3 seconds, 10¹³, `GPH`); only tests were changed:
 
 - fixture genesis timestamps are rounded down to the block interval;
@@ -166,7 +168,7 @@ The Release `witness_node` binary is 27 MB.
 
 | Repository | Branch | Commit |
 |---|---|---|
-| [graphene-blockchain/graphene-core](https://github.com/graphene-blockchain/graphene-core/tree/graphene) | `graphene` | `PENDING-CORE-MERGE` |
+| [graphene-blockchain/graphene-core](https://github.com/graphene-blockchain/graphene-core/tree/graphene) | `graphene` | `graphene-1.1` |
 | [graphene-blockchain/graphene-fc](https://github.com/graphene-blockchain/graphene-fc/tree/graphene) | `graphene` | `f17ef47` |
 | [graphene-blockchain/websocketpp](https://github.com/graphene-blockchain/websocketpp/tree/fc) | `fc` | `571a7b0` |
 | [graphene-blockchain/editline](https://github.com/graphene-blockchain/editline/tree/graphene) | `graphene` | `224e256` |
@@ -183,6 +185,7 @@ The Release `witness_node` binary is 27 MB.
 - [`1702df2`](https://github.com/graphene-blockchain/graphene-core/commit/1702df2f73bbd47f8a85b49d5283ec000e1b45f9) app: stop RPC servers before plugins, P2P and chain database on shutdown
 - [`4d845ba`](https://github.com/graphene-blockchain/graphene-core/commit/4d845ba0b42218009647a6fc907141d9ebde99dc) wallet: size range proofs to GRAPHENE_MAX_SHARE_SUPPLY; fix cli_confidential_tx_test
 - [`e34d05b`](https://github.com/graphene-blockchain/graphene-core/commit/e34d05b422e3484aadd1d67637e616576a5460d2) tests: adapt chain_test to this chain's parameters
+- [`584b37f`](https://github.com/graphene-blockchain/graphene-core/commit/584b37f2d50ba6186662b6084139a4220be608bf) build: point the fc submodule at the graphene-blockchain fork
 
 **graphene-fc**
 - [`a4de83e`](https://github.com/graphene-blockchain/graphene-fc/commit/a4de83e95594bbd1a65a54e324b1dbce83dce540) build: support Ubuntu 26.04 toolchain (GCC 15, CMake 4, Boost 1.90, OpenSSL 3.5)
