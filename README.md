@@ -25,53 +25,79 @@ Information for developers can be found in the [Graphene Developer Portal](https
 
 Getting Started
 ---------------
-Build instructions and additional documentation are available in the
-[wiki](https://github.com/bitshares/bitshares-core/wiki).
+Version 1.1 builds on a current toolchain: Ubuntu 26.04 LTS with GCC 15, CMake 4, Boost 1.90 and OpenSSL 3.5.
+Version 1.0 built only on Ubuntu 18.04–20.04. See [RELEASE_NOTES_1.1.md](RELEASE_NOTES_1.1.md) for the full list of
+changes and bug fixes.
 
-We recommend building on Ubuntu 16.04 LTS (64-bit) 
+We recommend building on Ubuntu 26.04 LTS (64-bit). This is the only system 1.1 has been built and tested on.
 
 **Build Dependencies**:
 
     sudo apt-get update
-    sudo apt-get install autoconf cmake make automake libtool git libboost-all-dev libssl-dev g++ libcurl4-openssl-dev
+    sudo apt-get install build-essential cmake git autoconf automake libtool pkg-config libboost-all-dev libssl-dev libreadline-dev zlib1g-dev libbz2-dev libcurl4-openssl-dev libzstd-dev libncurses-dev libicu-dev liblzma-dev doxygen
 
-**Build Script:**
+`libicu-dev` and `liblzma-dev` are required to link against the static Boost libraries.
 
-    git clone https://github.com/graphene-blockchain/graphene-core.git
-    cd graphene-core
-    git checkout graphene # may substitute "graphene" with current release tag
-    git submodule update --init --recursive
-    cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .
-    make
+**Build Script, option 1, debug build** (`witness_node` 366 MB, `cli_wallet` 426 MB): same optimisation as Release
+plus full debug information, for running the node under a debugger or reading its stack traces line by line. Sync
+speed is unaffected (1 h 56 min against 1 h 59 min for the Release build).
 
-**Upgrade Script** (prepend to the Build Script above if you built a prior release):
+    git clone --recurse-submodules -b graphene https://github.com/graphene-blockchain/graphene-core.git
+    cd graphene-core && mkdir build && cd build
+    cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"
+    make -j2 witness_node cli_wallet
+
+A plain `-DCMAKE_BUILD_TYPE=Debug` builds with `-O0` and produces a noticeably slower binary; that build is not
+tested for this release.
+
+**Build Script, option 2, slim build** (`witness_node` 27 MB, 20 MB after `strip`; `cli_wallet` 33 MB before
+`strip`): the build to run in production, on a small VPS or in a container image. The two `strip` lines are
+optional. After `strip` the stack traces print bare addresses instead of function names, so skip them on a node you
+may need to diagnose.
+
+    git clone --recurse-submodules -b graphene https://github.com/graphene-blockchain/graphene-core.git
+    cd graphene-core && mkdir build && cd build
+    cmake .. -DCMAKE_BUILD_TYPE=Release
+    make -j2 witness_node cli_wallet
+    strip programs/witness_node/witness_node
+    strip programs/cli_wallet/cli_wallet
+
+Run `make` without targets to build all programs and tests.
+
+**Upgrade Script** (run in an existing clone if you built a prior release):
 
     git remote set-url origin https://github.com/graphene-blockchain/graphene-core.git
+    git fetch origin
     git checkout graphene
-    git remote set-head origin --auto
     git pull
-    git submodule update --init --recursive # this command may fail
     git submodule sync --recursive
     git submodule update --init --recursive
 
-**NOTE:** Versions of [Boost](http://www.boost.org/) 1.57 through 1.69 are supported. Newer versions may work, but
-have not been tested. If your system came pre-installed with a version of Boost that you do not wish to use, you may
-manually build your preferred version and use it with Graphene by specifying it on the CMake command line.
+The `libraries/fc`, `fc/vendor/websocketpp` and `fc/vendor/editline` submodules now point to the `graphene-blockchain`
+forks, so `git submodule sync --recursive` is required after upgrading.
 
-Example: ``cmake -DBOOST_ROOT=/path/to/boost .``
+**NOTE:** Graphene 1.1 is tested with [Boost](http://www.boost.org/) 1.90 and OpenSSL 3.5. It requires CMake 3.5 or
+newer. Older Boost releases are not tested with this version. If your system came pre-installed with a version of
+Boost that you do not wish to use, you may manually build your preferred version and use it with Graphene by
+specifying it on the CMake command line.
+
+Example: ``cmake .. -DBOOST_ROOT=/path/to/boost``
 
 **NOTE:** Graphene requires a 64-bit operating system to build, and will not build on a 32-bit OS.
 
-**NOTE:** Graphene now supports Ubuntu 18.04 LTS
+**NOTE:** The compiler needs about 2–4 GB of memory per build job. On machines with less memory, add swap or build
+with fewer jobs (`make -j1`).
 
-**NOTE:** Graphene now supports OpenSSL 1.1.0
+**NOTE:** Binaries link against the system OpenSSL 3 and libcurl libraries, so a build made on Ubuntu 26.04 does not
+run on Ubuntu 18.04–20.04. Build on the system you run the node on.
 
 **After Building**, the `witness_node` can be launched with:
 
     ./programs/witness_node/witness_node
 
-The node will automatically create a data directory including a config file. It may take several hours to fully synchronize
-the blockchain. After syncing, you can exit the node using Ctrl+C and setup the command-line wallet by editing
+The node will automatically create a data directory including a config file. A full sync from scratch took about
+2 hours on a machine with 2 vCPUs and 3.8 GB of RAM (default plugins); the time depends on your hardware and peers.
+After syncing, you can exit the node using Ctrl+C and setup the command-line wallet by editing
 `witness_node_data_dir/config.ini` as follows:
 
     rpc-endpoint = 127.0.0.1:8090
