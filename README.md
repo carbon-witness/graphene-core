@@ -29,6 +29,57 @@ Version 1.1 builds on a current toolchain: Ubuntu 26.04 LTS with GCC 15, CMake 4
 Version 1.0 built only on Ubuntu 18.04–20.04. See [RELEASE_NOTES_1.1.md](RELEASE_NOTES_1.1.md) for the full list of
 changes and bug fixes.
 
+There are five ways to get a node, from the quickest to the most flexible:
+
+1. [Docker image from Docker Hub](#1-docker-image-from-docker-hub)
+2. [Docker image from the GitHub Container Registry](#2-docker-image-from-the-github-container-registry)
+3. [Docker image built from the Dockerfile](#3-docker-image-built-from-the-dockerfile)
+4. [Compiled from source, debug build](#4-compiled-from-source-debug-build)
+5. [Compiled from source, slim build](#5-compiled-from-source-slim-build)
+
+The images of options 1-3 run on any system with Docker, compiled on Ubuntu 26.04 inside the image. They contain the
+stripped `witness_node`, `cli_wallet` and `get_dev_key`. Running the node from an image, its environment variables
+and the debug symbols of the stripped binaries are described in [README-docker.md](README-docker.md).
+
+### 1. Docker image from Docker Hub
+
+    docker pull carbonwitness/graphene-core:latest
+    docker run -d --name graphene --stop-timeout 300 \
+        -v graphene-data:/var/lib/graphene -p 1776:1776 -p 127.0.0.1:8090:8090 \
+        carbonwitness/graphene-core:latest
+
+`latest` is the newest release; every release is also tagged with its version, e.g. `1.2.0`, and release candidates
+only with theirs, e.g. `1.2.0-rc1`. The blockchain lives in the `graphene-data` volume. Keep `--stop-timeout 300`:
+the node needs time to write its database on exit, and a node killed before that replays the whole chain on the next
+start.
+
+### 2. Docker image from the GitHub Container Registry
+
+The same image as on Docker Hub, published by the same release workflow; use it if Docker Hub limits your pulls.
+
+    docker pull ghcr.io/carbon-witness/graphene-core:latest
+    docker run -d --name graphene --stop-timeout 300 \
+        -v graphene-data:/var/lib/graphene -p 1776:1776 -p 127.0.0.1:8090:8090 \
+        ghcr.io/carbon-witness/graphene-core:latest
+
+### 3. Docker image built from the Dockerfile
+
+Builds the same image locally, from a clone you can check or modify. The only requirement on the host is Docker 23 or
+newer; the compiler and all libraries stay inside the build.
+
+    git clone --recurse-submodules -b graphene https://github.com/graphene-blockchain/graphene-core.git
+    cd graphene-core
+    docker build -t graphene-core .
+    docker run -d --name graphene --stop-timeout 300 \
+        -v graphene-data:/var/lib/graphene -p 1776:1776 -p 127.0.0.1:8090:8090 \
+        graphene-core
+
+Every compiler process needs 1.5-2 GB of memory and the build runs one per CPU; on a machine with little memory add
+`--build-arg JOBS=2`. On two cores the build takes about two hours. Instead of the last two commands,
+`docker compose up -d --build` builds the image and runs the node as set up in `compose.yml`.
+
+### Compiling from source (options 4 and 5)
+
 We recommend building on Ubuntu 26.04 LTS (64-bit). This is the only system 1.1 has been built and tested on.
 
 **Build Dependencies**:
@@ -38,9 +89,11 @@ We recommend building on Ubuntu 26.04 LTS (64-bit). This is the only system 1.1 
 
 `libicu-dev` and `liblzma-dev` are required to link against the static Boost libraries.
 
-**Build Script, option 1, debug build** (`witness_node` 366 MB, `cli_wallet` 426 MB): same optimisation as Release
-plus full debug information, for running the node under a debugger or reading its stack traces line by line. Sync
-speed is unaffected (1 h 56 min against 1 h 59 min for the Release build).
+### 4. Compiled from source, debug build
+
+`witness_node` 366 MB, `cli_wallet` 426 MB: same optimisation as Release plus full debug information, for running the
+node under a debugger or reading its stack traces line by line. Sync speed is unaffected (1 h 56 min against
+1 h 59 min for the Release build).
 
     git clone --recurse-submodules -b graphene https://github.com/graphene-blockchain/graphene-core.git
     cd graphene-core && mkdir build && cd build
@@ -50,10 +103,11 @@ speed is unaffected (1 h 56 min against 1 h 59 min for the Release build).
 A plain `-DCMAKE_BUILD_TYPE=Debug` builds with `-O0` and produces a noticeably slower binary; that build is not
 tested for this release.
 
-**Build Script, option 2, slim build** (`witness_node` 27 MB, 20 MB after `strip`; `cli_wallet` 33 MB before
-`strip`): the build to run in production, on a small VPS or in a container image. The two `strip` lines are
-optional. After `strip` the stack traces print bare addresses instead of function names, so skip them on a node you
-may need to diagnose.
+### 5. Compiled from source, slim build
+
+`witness_node` 27 MB, 20 MB after `strip`; `cli_wallet` 33 MB before `strip`: the build to run in production on a
+small VPS. The two `strip` lines are optional. After `strip` the stack traces print bare addresses instead of
+function names, so skip them on a node you may need to diagnose.
 
     git clone --recurse-submodules -b graphene https://github.com/graphene-blockchain/graphene-core.git
     cd graphene-core && mkdir build && cd build
@@ -63,18 +117,6 @@ may need to diagnose.
     strip programs/cli_wallet/cli_wallet
 
 Run `make` without targets to build all programs and tests.
-
-**Build with Docker**: the only requirement on the host is Docker 23 or newer; the compiler and all libraries stay
-inside the build. The image is compiled on Ubuntu 26.04 whatever the host system is, and contains the stripped
-`witness_node`, `cli_wallet` and `get_dev_key`.
-
-    git clone --recurse-submodules -b graphene https://github.com/graphene-blockchain/graphene-core.git
-    cd graphene-core
-    docker build -t graphene-core .
-
-Every compiler process needs 1.5-2 GB of memory and the build runs one per CPU; on a machine with little memory add
-`--build-arg JOBS=2`. Running the node from the image, the environment variables of the entry point and the debug
-symbols of the stripped binaries are described in [README-docker.md](README-docker.md).
 
 **Upgrade Script** (run in an existing clone if you built a prior release):
 
