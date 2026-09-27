@@ -67,7 +67,7 @@ The same image as on Docker Hub, published by the same release workflow; use it 
 Builds the same image locally, from a clone you can check or modify. The only requirement on the host is Docker 23 or
 newer; the compiler and all libraries stay inside the build.
 
-    git clone --recurse-submodules -b graphene https://github.com/graphene-blockchain/graphene-core.git
+    git clone --recurse-submodules -b fix/1.2.0 https://github.com/carbon-witness/graphene-core.git
     cd graphene-core
     docker build -t graphene-core .
     docker run -d --name graphene --stop-timeout 300 \
@@ -95,7 +95,7 @@ We recommend building on Ubuntu 26.04 LTS (64-bit). This is the only system 1.1 
 node under a debugger or reading its stack traces line by line. Sync speed is unaffected (1 h 56 min against
 1 h 59 min for the Release build).
 
-    git clone --recurse-submodules -b graphene https://github.com/graphene-blockchain/graphene-core.git
+    git clone --recurse-submodules -b fix/1.2.0 https://github.com/carbon-witness/graphene-core.git
     cd graphene-core && mkdir build && cd build
     cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"
     make -j2 witness_node cli_wallet
@@ -109,7 +109,7 @@ tested for this release.
 small VPS. The two `strip` lines are optional. After `strip` the stack traces print bare addresses instead of
 function names, so skip them on a node you may need to diagnose.
 
-    git clone --recurse-submodules -b graphene https://github.com/graphene-blockchain/graphene-core.git
+    git clone --recurse-submodules -b fix/1.2.0 https://github.com/carbon-witness/graphene-core.git
     cd graphene-core && mkdir build && cd build
     cmake .. -DCMAKE_BUILD_TYPE=Release
     make -j2 witness_node cli_wallet
