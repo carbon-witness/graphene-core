@@ -53,7 +53,7 @@ only with theirs, e.g. `1.2.0-rc2`. The blockchain lives in the `graphene-data` 
 the node needs time to write its database on exit, and a node killed before that replays the whole chain on the next
 start.
 
-On Windows with Docker Desktop, run the same command in PowerShell, with `` ` `` instead of `\` at the line ends. Setting
+**On Windows with Docker Desktop**, run the same command in PowerShell, with `` ` `` instead of `\` at the line ends. Setting
 the node up in the Docker Desktop window is described in [README-docker.md](README-docker.md#windows-docker-desktop).
 
 ### 2. Docker image from the GitHub Container Registry
