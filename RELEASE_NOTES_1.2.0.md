@@ -146,7 +146,7 @@ Commit: graphene-core `99037764`.
 The built-in list of seed nodes in `libraries/egenesis/seed-nodes.txt` has been updated to the nodes that currently
 accept P2P connections.
 
-Commit: graphene-core `5990f378`.
+Commit: graphene-core [`5990f378`](https://github.com/carbon-witness/graphene-core/commit/5990f378f408db753c5332579dad9a5e75013193).
 
 ## Docker image
 
