@@ -25,9 +25,9 @@ Information for developers can be found in the [Graphene Developer Portal](https
 
 Getting Started
 ---------------
-Since version 1.1, Graphene builds on a current toolchain: Ubuntu 26.04 LTS with GCC 15, CMake 4, Boost 1.90 and
-OpenSSL 3.5. Version 1.0 built only on Ubuntu 18.04–20.04. See [RELEASE_NOTES_1.2.0.md](RELEASE_NOTES_1.2.0.md) for the
-changes and bug fixes in 1.2.0.
+The current release is **1.2.0**; see [RELEASE_NOTES_1.2.0.md](RELEASE_NOTES_1.2.0.md) for its bug fixes and the new
+Docker image. Since version 1.1, Graphene builds on a current toolchain: Ubuntu 26.04 LTS with GCC 15, CMake 4,
+Boost 1.90 and OpenSSL 3.5. Version 1.0 built only on Ubuntu 18.04–20.04.
 
 There are five ways to get a node, from the quickest to the most flexible:
 
@@ -49,7 +49,7 @@ and the debug symbols of the stripped binaries are described in [README-docker.m
         carbonwitness/graphene-core:latest
 
 `latest` is the newest release; every release is also tagged with its version, e.g. `1.2.0`, and release candidates
-only with theirs, e.g. `1.2.0-rc1`. The blockchain lives in the `graphene-data` volume. Keep `--stop-timeout 300`:
+only with theirs, e.g. `1.2.0-rc2`. The blockchain lives in the `graphene-data` volume. Keep `--stop-timeout 300`:
 the node needs time to write its database on exit, and a node killed before that replays the whole chain on the next
 start.
 
@@ -127,8 +127,9 @@ Run `make` without targets to build all programs and tests.
     git submodule sync --recursive
     git submodule update --init --recursive
 
-The `libraries/fc`, `fc/vendor/websocketpp` and `fc/vendor/editline` submodules now point to the `graphene-blockchain`
-forks, so `git submodule sync --recursive` is required after upgrading.
+The `libraries/fc` submodule points to the [carbon-witness/graphene-fc](https://github.com/carbon-witness/graphene-fc)
+fork, `fc/vendor/websocketpp` and `fc/vendor/editline` to the `graphene-blockchain` forks, so
+`git submodule sync --recursive` is required after upgrading.
 
 **NOTE:** Graphene 1.2 is tested with [Boost](http://www.boost.org/) 1.90 and OpenSSL 3.5. It requires CMake 3.5 or
 newer. Older Boost releases are not tested with this version. If your system came pre-installed with a version of
@@ -335,5 +336,5 @@ FAQ
  
 License
 -------
-Graphene Core is under the MIT license. See [LICENSE](https://github.com/graphene-blockchain/graphene-core/blob/master/LICENSE.txt)
+Graphene Core is under the MIT license. See [LICENSE](LICENSE.txt)
 for more information.
