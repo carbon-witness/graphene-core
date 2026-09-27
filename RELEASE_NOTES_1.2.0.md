@@ -31,8 +31,7 @@ Release candidates are published only under their own tags, e.g. `1.2.0-rc2`; `l
 
 The toolchain is the same as in 1.1: Ubuntu 26.04 with GCC 15, CMake 4, Boost 1.90 and OpenSSL 3.5. In an existing
 clone, run `git submodule sync --recursive && git submodule update --init --recursive` after updating: the
-`libraries/fc` submodule points to the [carbon-witness/graphene-fc](https://github.com/carbon-witness/graphene-fc)
-fork.
+`libraries/fc`, `fc/vendor/websocketpp` and `fc/vendor/editline` submodules point to the `carbon-witness` forks.
 
 ## Bug fixes
 
@@ -214,10 +213,10 @@ api_helper_indexes`:
 |---|---|---|
 | [carbon-witness/graphene-core](https://github.com/carbon-witness/graphene-core/tree/graphene) | `graphene` | `graphene-1.2.0` |
 | [carbon-witness/graphene-fc](https://github.com/carbon-witness/graphene-fc/tree/graphene) | `graphene` | `290808d` |
-| [graphene-blockchain/websocketpp](https://github.com/graphene-blockchain/websocketpp/tree/fc) | `fc` | `571a7b0` |
-| [graphene-blockchain/editline](https://github.com/graphene-blockchain/editline/tree/graphene) | `graphene` | `224e256` |
+| [carbon-witness/websocketpp](https://github.com/carbon-witness/websocketpp/tree/graphene) | `graphene` | `571a7b0` |
+| [carbon-witness/editline](https://github.com/carbon-witness/editline/tree/graphene) | `graphene` | `224e256` |
 
-websocketpp and editline are unchanged since 1.1.
+websocketpp and editline are unchanged since 1.1; their submodule URLs now point to the `carbon-witness` forks.
 
 ## Commits
 

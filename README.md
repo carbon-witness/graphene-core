@@ -127,9 +127,9 @@ Run `make` without targets to build all programs and tests.
     git submodule sync --recursive
     git submodule update --init --recursive
 
-The `libraries/fc` submodule points to the [carbon-witness/graphene-fc](https://github.com/carbon-witness/graphene-fc)
-fork, `fc/vendor/websocketpp` and `fc/vendor/editline` to the `graphene-blockchain` forks, so
-`git submodule sync --recursive` is required after upgrading.
+The `libraries/fc`, `fc/vendor/websocketpp` and `fc/vendor/editline` submodules point to the `carbon-witness` forks
+([graphene-fc](https://github.com/carbon-witness/graphene-fc), [websocketpp](https://github.com/carbon-witness/websocketpp),
+[editline](https://github.com/carbon-witness/editline)), so `git submodule sync --recursive` is required after upgrading.
 
 **NOTE:** Graphene 1.2 is tested with [Boost](http://www.boost.org/) 1.90 and OpenSSL 3.5. It requires CMake 3.5 or
 newer. Older Boost releases are not tested with this version. If your system came pre-installed with a version of
