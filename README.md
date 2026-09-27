@@ -120,7 +120,7 @@ Run `make` without targets to build all programs and tests.
 
 **Upgrade Script** (run in an existing clone if you built a prior release):
 
-    git remote set-url origin https://github.com/graphene-blockchain/graphene-core.git
+    git remote set-url origin https://github.com/carbon-witness/graphene-core.git
     git fetch origin
     git checkout graphene
     git pull
