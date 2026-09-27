@@ -15,6 +15,8 @@ from clients. Two more were found and fixed along the way: a startup race that d
 1.2.0 is also the first release with a working Docker image. It is built on Ubuntu 26.04 and published to Docker Hub
 and the GitHub Container Registry by a GitHub Actions workflow.
 
+All submodules now come from the `carbon-witness` forks; the fork of `secp256k1-zkp` is new in 1.2.0.
+
 Consensus rules, block format and serialization are unchanged.
 
 ## Getting the node
@@ -31,8 +33,19 @@ Release candidates are published only under their own tags, e.g. `1.2.0-rc2`; `l
 
 The toolchain is the same as in 1.1: Ubuntu 26.04 with GCC 15, CMake 4, Boost 1.90 and OpenSSL 3.5. In an existing
 clone, run `git submodule sync --recursive && git submodule update --init --recursive` after updating: the
-`libraries/fc`, `fc/vendor/websocketpp`, `fc/vendor/editline` and `fc/vendor/secp256k1-zkp` submodules point to the
-`carbon-witness` forks.
+submodules point to new repositories (see below).
+
+## Repositories
+
+All submodules are built from the `carbon-witness` forks, branch `graphene`:
+
+- [graphene-fc](https://github.com/carbon-witness/graphene-fc) (`libraries/fc`) carries the 1.2.0 fixes: TLS 1.2+,
+  masked client frames and the git hash;
+- [websocketpp](https://github.com/carbon-witness/websocketpp) and [editline](https://github.com/carbon-witness/editline)
+  (`fc/vendor/`) moved from the `graphene-blockchain` forks, on the same commits as in 1.1;
+- [secp256k1-zkp](https://github.com/carbon-witness/secp256k1-zkp) (`fc/vendor/secp256k1-zkp`) is a new fork in 1.2.0.
+  1.1 took the library directly from `bitshares/secp256k1-zkp`; the fork is on the same commit, `bd06794`, so the code is
+  unchanged, and every dependency of the node is now built from a repository of this project.
 
 ## Bug fixes
 
