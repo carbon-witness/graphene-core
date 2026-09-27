@@ -25,9 +25,9 @@ Information for developers can be found in the [Graphene Developer Portal](https
 
 Getting Started
 ---------------
-Version 1.1 builds on a current toolchain: Ubuntu 26.04 LTS with GCC 15, CMake 4, Boost 1.90 and OpenSSL 3.5.
-Version 1.0 built only on Ubuntu 18.04–20.04. See [RELEASE_NOTES_1.1.md](RELEASE_NOTES_1.1.md) for the full list of
-changes and bug fixes.
+Since version 1.1, Graphene builds on a current toolchain: Ubuntu 26.04 LTS with GCC 15, CMake 4, Boost 1.90 and
+OpenSSL 3.5. Version 1.0 built only on Ubuntu 18.04–20.04. See [RELEASE_NOTES_1.2.0.md](RELEASE_NOTES_1.2.0.md) for the
+changes and bug fixes in 1.2.0.
 
 There are five ways to get a node, from the quickest to the most flexible:
 
@@ -80,7 +80,7 @@ Every compiler process needs 1.5-2 GB of memory and the build runs one per CPU; 
 
 ### Compiling from source (options 4 and 5)
 
-We recommend building on Ubuntu 26.04 LTS (64-bit). This is the only system 1.1 has been built and tested on.
+We recommend building on Ubuntu 26.04 LTS (64-bit). This is the only system 1.1 and 1.2 have been built and tested on.
 
 **Build Dependencies**:
 
@@ -130,7 +130,7 @@ Run `make` without targets to build all programs and tests.
 The `libraries/fc`, `fc/vendor/websocketpp` and `fc/vendor/editline` submodules now point to the `graphene-blockchain`
 forks, so `git submodule sync --recursive` is required after upgrading.
 
-**NOTE:** Graphene 1.1 is tested with [Boost](http://www.boost.org/) 1.90 and OpenSSL 3.5. It requires CMake 3.5 or
+**NOTE:** Graphene 1.2 is tested with [Boost](http://www.boost.org/) 1.90 and OpenSSL 3.5. It requires CMake 3.5 or
 newer. Older Boost releases are not tested with this version. If your system came pre-installed with a version of
 Boost that you do not wish to use, you may manually build your preferred version and use it with Graphene by
 specifying it on the CMake command line.
