@@ -143,15 +143,8 @@ Commit: graphene-core `99037764`.
 
 ## Seed nodes
 
-The built-in seed list in `libraries/egenesis/seed-nodes.txt` has been refreshed. At release time, 11 of its 14 entries
-had not accepted a single connection since September 24 (46 failed attempts each from a node in Hong Kong) and have been
-removed. Three live peers that accept P2P connections on a fixed port have been added:
-
-- kept: `195.201.86.214:4646`, `78.46.200.101:1666`, `seed.graphene.fans:1776`;
-- added: `37.27.115.162:1776`, `95.217.59.180:4646`, `65.109.67.61:4652`;
-- removed: `65.21.6.225:1666`, `95.216.200.20:4646`, `116.203.0.169:1666`, `gph1.lexai.host:1776` (no longer resolves),
-  `157.90.252.185:1776`, `35.205.15.59:1776`, `95.217.238.169:1776`, `65.108.57.122:1666`, `23.88.107.61:1776`,
-  `167.235.68.245:1666`, `159.223.31.163:1776`.
+The built-in list of seed nodes in `libraries/egenesis/seed-nodes.txt` has been updated to the nodes that currently
+accept P2P connections.
 
 Commit: graphene-core `5990f378`.
 
