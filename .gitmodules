@@ -6,4 +6,4 @@
     path = libraries/fc
     url = https://github.com/carbon-witness/graphene-fc.git
     ignore = dirty
-    branch = fix/1.2.0
+    branch = graphene

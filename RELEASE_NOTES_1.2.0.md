@@ -1,6 +1,6 @@
 # graphene-core 1.2.0
 
-**Status:** release candidate `graphene-1.2.0-rc2` (September 24, 2026); the date is set with the `graphene-1.2.0` tag
+**Date:** September 27, 2026
 **Branch:** `graphene` ([carbon-witness/graphene-core](https://github.com/carbon-witness/graphene-core/tree/graphene))
 **Tag:** `graphene-1.2.0`
 **Previous version:** 1.1 — tag `graphene-1.1` (September 15, 2026), [release notes](https://github.com/graphene-blockchain/graphene-core/blob/graphene-1.1/RELEASE_NOTES_1.1.md)
@@ -202,6 +202,8 @@ api_helper_indexes`:
 
 ## Known limitations
 
+- The full test suite (`chain_test`, `cli_test`, `app_test`, fc `all_tests`) has not been rerun on a `-g` build
+  for 1.2.0; the checks listed under Tests were run.
 - `cmake -DENABLE_INSTALLER=ON` fails: CPack looks for a missing `LICENSE.md`. This predates 1.2.0.
 - In fc `all_tests`, the three `fc_stacktrace` tests fail on a build without `-g`: there is nothing to symbolize.
 - `libraries/egenesis/seed-nodes.txt` has not been updated since 1.1, when 2 of its 14 seed nodes were reachable.
