@@ -17,6 +17,8 @@ and the GitHub Container Registry by a GitHub Actions workflow.
 
 All submodules now come from the `carbon-witness` forks; the fork of `secp256k1-zkp` is new in 1.2.0.
 
+The built-in seed node list has been refreshed.
+
 Consensus rules, block format and serialization are unchanged.
 
 ## Getting the node
@@ -139,6 +141,20 @@ Fixed `usleep` calls were replaced with `wait_for()`, which polls a condition fo
 Verified: 100 / 100 single runs, 10 / 10 full `app_test` runs, 20 / 20 with both cores under load.
 Commit: graphene-core `99037764`.
 
+## Seed nodes
+
+The built-in seed list in `libraries/egenesis/seed-nodes.txt` has been refreshed. At release time, 11 of its 14 entries
+had not accepted a single connection since September 24 (46 failed attempts each from a node in Hong Kong) and have been
+removed. Three live peers that accept P2P connections on a fixed port have been added:
+
+- kept: `195.201.86.214:4646`, `78.46.200.101:1666`, `seed.graphene.fans:1776`;
+- added: `37.27.115.162:1776`, `95.217.59.180:4646`, `65.109.67.61:4652`;
+- removed: `65.21.6.225:1666`, `95.216.200.20:4646`, `116.203.0.169:1666`, `gph1.lexai.host:1776` (no longer resolves),
+  `157.90.252.185:1776`, `35.205.15.59:1776`, `95.217.238.169:1776`, `65.108.57.122:1666`, `23.88.107.61:1776`,
+  `167.235.68.245:1666`, `159.223.31.163:1776`.
+
+Commit: graphene-core `5990f378`.
+
 ## Docker image
 
 The `Dockerfile` inherited from BitShares was based on `phusion/baseimage:0.11` (Ubuntu 18.04) and no longer built.
@@ -219,14 +235,13 @@ api_helper_indexes`:
   for 1.2.0; the checks listed under Tests were run.
 - `cmake -DENABLE_INSTALLER=ON` fails: CPack looks for a missing `LICENSE.md`. This predates 1.2.0.
 - In fc `all_tests`, the three `fc_stacktrace` tests fail on a build without `-g`: there is nothing to symbolize.
-- `libraries/egenesis/seed-nodes.txt` has not been updated since 1.1, when 2 of its 14 seed nodes were reachable.
 
 ## Components
 
 | Repository | Branch | Commit |
 |---|---|---|
 | [carbon-witness/graphene-core](https://github.com/carbon-witness/graphene-core/tree/graphene) | `graphene` | `graphene-1.2.0` |
-| [carbon-witness/graphene-fc](https://github.com/carbon-witness/graphene-fc/tree/graphene) | `graphene` | `290808d` |
+| [carbon-witness/graphene-fc](https://github.com/carbon-witness/graphene-fc/tree/graphene) | `graphene` | `551377b` |
 | [carbon-witness/websocketpp](https://github.com/carbon-witness/websocketpp/tree/graphene) | `graphene` | `571a7b0` |
 | [carbon-witness/editline](https://github.com/carbon-witness/editline/tree/graphene) | `graphene` | `224e256` |
 | [carbon-witness/secp256k1-zkp](https://github.com/carbon-witness/secp256k1-zkp/tree/graphene) | `graphene` | `bd06794` |
@@ -250,8 +265,13 @@ forks.
 - [`78b4229a`](https://github.com/carbon-witness/graphene-core/commit/78b4229ade8e91f908b8809d0105929a9e8205a7) ci: keep the compiler cache between workflow runs
 - [`8798f8b8`](https://github.com/carbon-witness/graphene-core/commit/8798f8b86713f8a4fef606df4b6a043a0f5b2009) ci: do not tag pre-releases as latest
 - [`8a4c1123`](https://github.com/carbon-witness/graphene-core/commit/8a4c1123c50183e6d604598920787727ce61bd9c) docker: start as root, fix permissions, drop to uid 10001
-- README: the ways to get a node and clone commands for the carbon-witness fork (`f8091fc1`, `ec86b97f`, `1b970896`, `254a82a0`)
+- [`949b5787`](https://github.com/carbon-witness/graphene-core/commit/949b578765018312811ed4f85c5996f3a42ebf71) fc: bump to websocketpp and editline on the carbon-witness forks
+- [`82ce9145`](https://github.com/carbon-witness/graphene-core/commit/82ce9145630df03b3afa1da7e7940d9f70608556) fc: bump to secp256k1-zkp on the carbon-witness fork
+- [`5990f378`](https://github.com/carbon-witness/graphene-core/commit/5990f378f408db753c5332579dad9a5e75013193) egenesis: drop the dead seed nodes, add three live ones
+- README and release notes: the ways to get a node, clone commands and submodules on the carbon-witness forks (`f8091fc1`, `ec86b97f`, `1b970896`, `254a82a0`, `a3934db7`, `0a5560c2`, `bff0234c`)
 
 **graphene-fc**
 - [`85f5d52`](https://github.com/carbon-witness/graphene-fc/commit/85f5d526958451db72bfda7612d6d84a4d67c12d) websocket: TLS 1.2+ and masked client frames
 - [`290808d`](https://github.com/carbon-witness/graphene-fc/commit/290808d63bbc91fc75c2ec8dbed17d28e35315f6) cmake: take the HEAD hash from git rev-parse
+- [`f516383`](https://github.com/carbon-witness/graphene-fc/commit/f51638374794b044c16153fd2e24d31ab134b30f) build: point websocketpp and editline at the carbon-witness forks
+- [`551377b`](https://github.com/carbon-witness/graphene-fc/commit/551377b5bd66410e2c0ffa41bca1358452484a9a) build: point secp256k1-zkp at the carbon-witness fork
