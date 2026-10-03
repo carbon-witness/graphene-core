@@ -5,7 +5,8 @@ use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::time::Duration;
 use tungstenite::{client, Message};
 
-const TIMEOUT: Duration = Duration::from_secs(3);
+// The node answers API calls on the thread that also applies blocks, so during sync an answer can take seconds
+const TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct Rpc {
     ws: tungstenite::WebSocket<TcpStream>,

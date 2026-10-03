@@ -8,15 +8,47 @@ const SLOW_MS = 1500;
 // Blocks fetched while syncing are hours or years old; only live blocks can be "slow"
 const isSlow = (ms) => ms > SLOW_MS && ms < 3600 * 1000;
 const GOT_BLOCK = /Got block: #(\d+) (\w+) time: (\S+) transaction\(s\): (\d+) latency: (-?\d+) ms from: (\S+)\s+irreversible: (\d+) \(-(\d+)\)/;
+// The level the node writes before "]" (fc file appender); older logs have none
+const LEVEL = / (debug|info|warn|error) +\] /;
+// Continuation lines of a multi-line message (exception details) start without a timestamp
+const STARTS_ENTRY = /^\d{4}-\d\d-\d\dT/;
+const LEVEL_RANK = { debug: 0, info: 1, warn: 2, error: 3 };
 
 let status = null;
-let lines = [];          // [seq, text], already masked by the app
+let lines = [];          // [seq, text, level], already masked by the app
 let cursor = 0;
 let mode = "raw";
 let follow = true;       // keep the feed scrolled to the newest line
 let unseen = 0;
-const headSamples = [];  // [time ms, head block] over the last minute
+const headSamples = [];  // [time ms, head block] over the last minute, from fresh API answers only
 
+// ---------- translations ----------
+let dict = {}, fallback = {};
+const t = (key, args = {}) =>
+  (dict[key] ?? fallback[key] ?? key).replace(/\{(\w+)\}/g, (m, k) => (k in args ? args[k] : m));
+const loadLocale = (lang) => fetch(`locales/${lang}.json`).then((r) => r.json());
+
+async function setLanguage(lang) {
+  if (!Object.keys(fallback).length) fallback = await loadLocale("en");
+  dict = await loadLocale(lang).catch(() => fallback);
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = t(el.dataset.i18n)));
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => (el.placeholder = t(el.dataset.i18nPlaceholder)));
+  if (status) renderStatus(status);
+  renderJournalStatus();
+  renderJournal(true);
+}
+
+const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString(dict._number_locale || "en-US"));
+function human(s) {
+  if (s == null) return "—";
+  if (s < 120) return t("dur.s", { n: s });
+  if (s < 7200) return t("dur.min", { n: Math.floor(s / 60) });
+  if (s < 172800) return t("dur.h", { n: Math.floor(s / 3600) });
+  return t("dur.d", { n: Math.floor(s / 86400) });
+}
+
+// ---------- errors ----------
 function showError(e) {
   const a = $("alert");
   a.textContent = String(e);
@@ -36,20 +68,11 @@ document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () 
 }));
 
 // ---------- dashboard ----------
-const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("ru-RU"));
-function human(s) {
-  if (s == null) return "—";
-  if (s < 120) return `${s} с`;
-  if (s < 7200) return `${Math.floor(s / 60)} мин`;
-  if (s < 172800) return `${Math.floor(s / 3600)} ч`;
-  return `${Math.floor(s / 86400)} дн`;
-}
-
 function blocksPerMinute() {
   if (headSamples.length < 2) return null;
   const [t0, b0] = headSamples[0];
   const [t1, b1] = headSamples[headSamples.length - 1];
-  return t1 > t0 ? Math.round(((b1 - b0) * 60000) / (t1 - t0)) : null;
+  return t1 - t0 >= 5000 ? Math.round(((b1 - b0) * 60000) / (t1 - t0)) : null;
 }
 
 function renderStatus(s) {
@@ -63,22 +86,23 @@ function renderStatus(s) {
 
   const alert = $("alert");
   let msg = "";
-  if (s.chain_id_mismatch) msg = `На ${s.rpc_endpoint} отвечает нода другой сети (chain ID не совпадает с логом нашей ноды).`;
-  else if (s.phase === "failed") msg = `${s.last_exit || "Нода падает"}.\nПоследние строки лога — во вкладке «Журнал».`;
-  else if (s.phase === "stop_timed_out") msg = "Нода не остановилась за 60 секунд. Можно подождать ещё или остановить принудительно (тогда при следующем запуске будет replay).";
-  else if (running && !s.can_stop_cleanly) msg = "Нода запущена без события остановки: остановить её можно только принудительно.";
+  if (s.chain_id_mismatch) msg = t("alert.mismatch", { endpoint: s.rpc_endpoint });
+  else if (s.phase === "failed") msg = t("alert.failed", { what: s.last_exit || "" });
+  else if (s.phase === "stop_timed_out") msg = t("alert.stop_timeout");
+  else if (running && !s.can_stop_cleanly) msg = t("alert.no_event");
+  else if (running && s.api_stale_seconds != null) msg = t("alert.api_stale", { s: s.api_stale_seconds });
   if (msg) { alert.textContent = msg; alert.className = "alert error"; }
   else if (Date.now() > Number(alert.dataset.until || 0)) alert.className = "alert hidden";
 
   const c = s.chain;
-  if (c && running) {
+  if (c && running && s.api_stale_seconds == null) {
     const now = Date.now();
     headSamples.push([now, c.head_block]);
     while (headSamples.length && now - headSamples[0][0] > 60000) headSamples.shift();
-  } else headSamples.length = 0;
+  } else if (!running) headSamples.length = 0;
 
-  let pct = null, title = "Синхронизация";
-  if (s.phase === "starting" && s.log.replay_percent != null) { pct = s.log.replay_percent; title = "Replay базы"; }
+  let pct = null, title = t("dash.sync");
+  if (s.phase === "starting" && s.log.replay_percent != null) { pct = s.log.replay_percent; title = t("dash.replay"); }
   else if (c && running) pct = s.sync_percent;
   $("progress-title").textContent = title;
   $("progress-value").textContent = pct == null ? "—" : `${pct.toFixed(1)}%`;
@@ -91,7 +115,7 @@ function renderStatus(s) {
   $("chain").textContent = (c && c.chain_id) || s.log.chain_id || "—";
   $("rpc").textContent = `ws://${s.rpc_endpoint}`;
   $("datadir").textContent = s.data_dir;
-  $("proc").textContent = running ? `PID ${s.pid}${s.attached ? " (найдена запущенной)" : ""}` : "не запущена";
+  $("proc").textContent = running ? t(s.attached ? "proc.attached" : "proc.running", { pid: s.pid }) : t("proc.not_running");
   $("lastexit").textContent = s.last_exit || "—";
 }
 
@@ -99,8 +123,7 @@ $("btn-start").onclick = () => call("node_start");
 $("btn-stop").onclick = () => call("node_stop");
 $("btn-restart").onclick = () => call("node_restart");
 $("btn-kill").onclick = async () => {
-  if (await ask("Остановить ноду принудительно? При следующем запуске нода проведёт replay базы.", { title: "Graphene Node", kind: "warning" }))
-    call("node_kill");
+  if (await ask(t("dlg.kill"), { title: "Graphene Node", kind: "warning" })) call("node_kill");
 };
 $("btn-copy").onclick = () => call("copy_rpc");
 $("btn-open-data").onclick = () => call("open_data_dir");
@@ -109,31 +132,29 @@ $("btn-open-data").onclick = () => call("open_data_dir");
 const feed = $("feed");
 const blocksBody = document.querySelector("#blocks tbody");
 
-function lineClass(t) {
-  if (/exception|assert|error|failed/i.test(t)) return "err";
-  if (/warn/i.test(t)) return "warn";
-  const m = GOT_BLOCK.exec(t);
-  if (m && isSlow(Number(m[5]))) return "warn";
-  return "";
+function levelOf(text, previous) {
+  const m = LEVEL.exec(text);
+  if (m) return m[1];
+  return STARTS_ENTRY.test(text) ? "info" : previous; // details of the entry above
 }
 
-function visible(t) {
+function visible([, text, level]) {
+  if (LEVEL_RANK[level] < ({ all: 0, warn: 2, error: 3 })[$("level").value]) return false;
+  if ($("hide-blocks").checked && text.includes("Got block:")) return false;
   const q = $("filter").value.trim().toLowerCase();
-  if ($("hide-blocks").checked && t.includes("Got block:")) return false;
-  return !q || t.toLowerCase().includes(q);
+  return !q || text.toLowerCase().includes(q);
 }
 
-function lineEl(t) {
+function lineEl([, text, level]) {
   const d = document.createElement("div");
-  d.textContent = t.replace(/[ \t]{2,}/g, "  "); // the log pads columns with tabs and runs of spaces
-  const c = lineClass(t);
-  if (c) d.className = c;
+  d.textContent = text.replace(/[ \t]{2,}/g, "  "); // the log pads columns with tabs and runs of spaces
+  if (level !== "info") d.className = level;
   return d;
 }
 
 function blockRow(m) {
   const tr = document.createElement("tr");
-  const cells = [fmt(m[1]), m[3].replace("T", " "), m[6], m[4], `${fmt(m[5])} мс`, m[8]];
+  const cells = [fmt(m[1]), m[3].replace("T", " "), m[6], m[4], t("unit.ms", { n: fmt(m[5]) }), m[8]];
   cells.forEach((v, i) => {
     const td = document.createElement("td");
     td.textContent = v;
@@ -148,15 +169,15 @@ function renderJournal(full, added = []) {
   if (mode === "raw") {
     if (full) feed.replaceChildren();
     const frag = document.createDocumentFragment();
-    for (const [, t] of src) if (visible(t)) frag.appendChild(lineEl(t));
+    for (const l of src) if (visible(l)) frag.appendChild(lineEl(l));
     feed.appendChild(frag);
     while (feed.childElementCount > MAX_LINES) feed.firstChild.remove();
     if (follow) feed.scrollTop = feed.scrollHeight;
   } else {
     if (full) blocksBody.replaceChildren();
-    for (const [, t] of src) {
-      const m = GOT_BLOCK.exec(t);
-      if (m && visible(t)) blocksBody.prepend(blockRow(m)); // newest first
+    for (const l of src) {
+      const m = GOT_BLOCK.exec(l[1]);
+      if (m && visible(l)) blocksBody.prepend(blockRow(m)); // newest first
     }
   }
 }
@@ -166,22 +187,26 @@ function renderJournalStatus() {
     const m = GOT_BLOCK.exec(lines[i][1]);
     if (!m) continue;
     const rate = blocksPerMinute();
-    $("jstatus").textContent = `Последний блок: #${fmt(m[1])} · ${m[3].replace("T", " ")} · от ${m[6]} · задержка ${fmt(m[5])} мс · до необратимого ${m[8]}` +
-      (rate != null ? ` · ${fmt(rate)} блоков/мин` : "");
+    $("jstatus").textContent =
+      t("journal.status", { block: fmt(m[1]), time: m[3].replace("T", " "), witness: m[6], latency: fmt(m[5]), irr: m[8] }) +
+      (rate != null ? t("journal.rate", { rate: fmt(rate) }) : "");
     return;
   }
+  $("jstatus").textContent = t("journal.none");
 }
 
 async function pollLog() {
-  const added = await invoke("get_log", { cursor }).catch(() => []);
-  if (!added.length) return;
-  cursor = added[added.length - 1][0];
+  const fresh = await invoke("get_log", { cursor }).catch(() => []);
+  if (!fresh.length) return;
+  cursor = fresh[fresh.length - 1][0];
+  let prev = lines.length ? lines[lines.length - 1][2] : "info";
+  const added = fresh.map(([seq, text]) => (prev = levelOf(text, prev), [seq, text, prev]));
   lines = lines.concat(added).slice(-MAX_LINES);
   if ($("journal").classList.contains("active")) {
     renderJournal(false, added);
     if (!follow) {
-      unseen += added.filter(([, t]) => visible(t)).length;
-      $("btn-latest").textContent = `↓ к последним (${unseen} новых)`;
+      unseen += added.filter(visible).length;
+      $("btn-latest").textContent = t("journal.latest", { n: unseen });
     }
   }
   renderJournalStatus();
@@ -203,9 +228,10 @@ document.querySelectorAll(".mode").forEach((b) => b.addEventListener("click", ()
   renderJournal(true);
 }));
 $("filter").addEventListener("input", () => renderJournal(true));
+$("level").addEventListener("change", () => renderJournal(true));
 $("hide-blocks").addEventListener("change", () => renderJournal(true));
 $("btn-copy-log").onclick = () => {
-  const text = lines.map(([, t]) => t).filter(visible).join("\n");
+  const text = lines.filter(visible).map(([, l]) => l).join("\n");
   navigator.clipboard.writeText(text).catch(showError);
 };
 $("btn-open-log").onclick = () => call("open_log");
@@ -214,27 +240,33 @@ $("btn-open-log").onclick = () => call("open_log");
 const form = $("settings-form");
 function rpcIsLocal(ep) { return /^(127\.0\.0\.1|localhost):\d+$/.test(ep.trim()); }
 async function loadSettings() {
-  const s = await call("get_settings");
+  const [s, langs] = await Promise.all([call("get_settings"), call("get_languages")]);
+  form.language.replaceChildren(...langs.map(([code, name]) => new Option(name, code, false, code === s.language)));
   form.node_exe.value = s.node_exe;
   form.data_dir.value = s.data_dir;
   form.rpc_endpoint.value = s.rpc_endpoint;
   form.start_node_with_app.checked = s.start_node_with_app;
   $("rpc-warning").classList.toggle("hidden", rpcIsLocal(s.rpc_endpoint));
+  return s;
 }
 form.rpc_endpoint.addEventListener("input", () => $("rpc-warning").classList.toggle("hidden", rpcIsLocal(form.rpc_endpoint.value)));
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
+  const before = await call("get_settings");
   const settings = {
     node_exe: form.node_exe.value.trim(),
     data_dir: form.data_dir.value.trim(),
     rpc_endpoint: form.rpc_endpoint.value.trim(),
     start_node_with_app: form.start_node_with_app.checked,
+    language: form.language.value,
   };
   await call("save_settings", { settings });
-  $("saved").textContent = "Сохранено";
+  if (settings.language !== before.language) await setLanguage(settings.language);
+  $("saved").textContent = t("settings.saved");
   setTimeout(() => ($("saved").textContent = ""), 3000);
-  if (status && status.pid != null &&
-      await ask("Настройки применятся после перезапуска ноды. Перезапустить сейчас?", { title: "Graphene Node", kind: "info" }))
+  const nodeOptionsChanged = ["node_exe", "data_dir", "rpc_endpoint"].some((k) => settings[k] !== before[k]);
+  if (nodeOptionsChanged && status && status.pid != null &&
+      await ask(t("dlg.restart_after_save"), { title: "Graphene Node", kind: "info" }))
     call("node_restart");
 });
 
@@ -246,6 +278,9 @@ async function tick() {
   } catch (e) { showError(e); }
   await pollLog();
 }
-loadSettings();
-tick();
-setInterval(tick, 1000);
+(async () => {
+  const s = await loadSettings().catch(() => ({ language: "en" }));
+  await setLanguage(s.language);
+  tick();
+  setInterval(tick, 1000);
+})();
