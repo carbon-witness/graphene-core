@@ -193,6 +193,8 @@ function renderJournal(full, added = []) {
       const m = GOT_BLOCK.exec(l[1]);
       if (m && visible(l)) blocksBody.prepend(blockRow(m)); // newest first
     }
+    // Live, the node logs a block every few seconds: keep the table as bounded as the raw feed
+    while (blocksBody.childElementCount > MAX_LINES) blocksBody.lastChild.remove();
   }
 }
 
