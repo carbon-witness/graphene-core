@@ -10,9 +10,10 @@ use std::time::{Duration, Instant};
 fn show(sup: &Supervisor) -> node_gui::supervisor::Status {
     let s = sup.status();
     println!(
-        "{:?} {} pid={:?} attached={} clean_stop={} head={:?} stale={:?} | {}{}",
+        "{:?} {} {} pid={:?} attached={} clean_stop={} head={:?} stale={:?} | {}{}",
         s.phase,
         s.color,
+        s.glyph,
         s.pid,
         s.attached,
         s.can_stop_cleanly,
@@ -69,6 +70,13 @@ fn main() {
             show(&sup);
             println!("stopped={ok} in {} ms", t.elapsed().as_millis());
             std::process::exit(if ok { 0 } else { 1 });
+        }
+        "restart" => {
+            sup.restart().ok();
+            for _ in 0..40 {
+                show(&sup);
+                std::thread::sleep(Duration::from_secs(1));
+            }
         }
         "watch" => {
             let n: u64 = a.get(5).and_then(|x| x.parse().ok()).unwrap_or(10);

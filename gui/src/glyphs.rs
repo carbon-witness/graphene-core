@@ -16,6 +16,17 @@ pub enum Glyph {
 }
 
 impl Glyph {
+    /// The glyph named by Status::glyph
+    pub fn from_name(name: &str) -> Glyph {
+        match name {
+            "play" => Glyph::Play,
+            "busy" => Glyph::Busy,
+            "restart" => Glyph::Restart,
+            "cross" => Glyph::Cross,
+            _ => Glyph::Pause,
+        }
+    }
+
     pub fn for_status_color(color: &str) -> Glyph {
         match color {
             "green" => Glyph::Play,

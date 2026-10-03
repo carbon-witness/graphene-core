@@ -86,6 +86,8 @@ struct Inner {
     phase: Phase,
     phase_since: Instant,
     restart_after_stop: bool,
+    /// A restart the user asked for is under way (stop, then start); shown with the restart glyph
+    restarting: bool,
     restart_at: Option<Instant>,
     crashes: Vec<Instant>,
     last_exit: Option<LastEvent>,
@@ -103,6 +105,8 @@ pub struct Status {
     pub phase: Phase,
     /// Tray icon colour: gray, yellow, green or red
     pub color: &'static str,
+    /// The glyph the tray and the window show: play, pause, busy, restart or cross (glyphs.rs)
+    pub glyph: &'static str,
     pub summary: String,
     pub pid: Option<u32>,
     pub attached: bool,
@@ -152,6 +156,7 @@ impl Supervisor {
                 phase: Phase::Stopped,
                 phase_since: Instant::now(),
                 restart_after_stop: false,
+                restarting: false,
                 restart_at: None,
                 crashes: Vec::new(),
                 last_exit: None,
@@ -182,6 +187,7 @@ impl Supervisor {
         let mut i = self.lock();
         i.crashes.clear(); // a manual start lifts the watchdog's stop
         i.want_running = true;
+        i.restarting = false;
         let r = i.start_node();
         if let Err(e) = &r {
             i.want_running = false;
@@ -196,11 +202,15 @@ impl Supervisor {
     }
 
     pub fn stop(&self) -> Result<(), String> {
-        self.lock().stop_node()
+        let mut i = self.lock();
+        i.restarting = false;
+        i.restart_after_stop = false;
+        i.stop_node()
     }
 
     pub fn restart(&self) -> Result<(), String> {
         let mut i = self.lock();
+        i.restarting = true;
         if i.node.is_none() {
             i.want_running = true;
             return i.start_node();
@@ -312,6 +322,9 @@ impl Inner {
     }
 
     fn set_phase(&mut self, p: Phase) {
+        if matches!(p, Phase::Running | Phase::Failed | Phase::WaitingRestart) {
+            self.restarting = false; // the restart is over, one way or the other
+        }
         self.phase = p;
         self.phase_since = Instant::now();
     }
@@ -549,9 +562,17 @@ impl Inner {
             Phase::Running if synced => "green",
             _ => "yellow",
         };
+        let glyph = match (self.restarting, color) {
+            (true, _) if matches!(self.phase, Phase::Stopping | Phase::Stopped | Phase::Starting) => "restart",
+            (_, "green") => "play",
+            (_, "yellow") => "busy",
+            (_, "red") => "cross",
+            _ => "pause",
+        };
         Status {
             phase: self.phase,
             color,
+            glyph,
             summary,
             pid: self.node.as_ref().map(|n| n.process.pid),
             attached: self.attached,

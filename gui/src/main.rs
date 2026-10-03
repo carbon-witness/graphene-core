@@ -275,7 +275,7 @@ fn build_tray(app: &AppHandle, lang: &str) -> tauri::Result<(TrayIcon, TrayItems
 fn tray_updates(app: AppHandle, tray: TrayIcon, items: TrayItems) {
     std::thread::spawn(move || {
         let sup = app.state::<AppState>().sup.clone();
-        let mut last_color = "";
+        let mut last_glyph = "";
         let mut last_lang = sup.settings().language;
         loop {
             let lang = sup.settings().language;
@@ -286,9 +286,9 @@ fn tray_updates(app: AppHandle, tray: TrayIcon, items: TrayItems) {
                 last_lang = lang;
             }
             let s = sup.status();
-            if s.color != last_color {
-                tray.set_icon(Some(status_icon(s.color))).ok();
-                last_color = s.color;
+            if s.glyph != last_glyph {
+                tray.set_icon(Some(glyph_image(Glyph::from_name(s.glyph), 32))).ok();
+                last_glyph = s.glyph;
             }
             tray.set_tooltip(Some(format!("Graphene Node — {}", s.summary))).ok();
             items.status.set_text(format!("● {}", s.summary)).ok();
