@@ -217,14 +217,23 @@ int main(int argc, char** argv) {
       }, SIGTERM);
 
 #ifdef _WIN32
-      if( shutdown_watcher )
-         shutdown_watcher->start( [exit_promise]( const std::string& reason ) {
-            // Called from the watcher's own thread; hand over to the asio thread like the signal handlers above
-            boost::asio::post( fc::asio::default_io_service(), [exit_promise, reason]() {
-               elog( "${r}, attempting to exit cleanly", ("r", reason) );
-               exit_promise->set_value(SIGTERM);
-            } );
+      // Called from threads of their own; hand over to the asio thread like the signal handlers above
+      auto request_exit = [exit_promise]( const std::string& reason ) {
+         boost::asio::post( fc::asio::default_io_service(), [exit_promise, reason]() {
+            elog( "${r}, attempting to exit cleanly", ("r", reason) );
+            exit_promise->set_value(SIGTERM);
          } );
+      };
+      if( shutdown_watcher )
+         shutdown_watcher->start( request_exit );
+      try
+      {
+         witness_node::install_console_close_handler( request_exit );
+      }
+      catch( const std::runtime_error& e )
+      {
+         wlog( "${e}; closing the console window will not stop the node cleanly", ("e", e.what()) );
+      }
 #endif
 
       ilog("Started Graphene node on a chain with ${h} blocks.", ("h", node->chain_database()->head_block_num()));
@@ -238,6 +247,9 @@ int main(int argc, char** argv) {
       node->shutdown_plugins();
       node->shutdown();
       delete node;
+#ifdef _WIN32
+      witness_node::console_close_handled();
+#endif
       return EXIT_SUCCESS;
    } catch( const fc::exception& e ) {
       // deleting the node can yield, so do this outside the exception handler
@@ -249,6 +261,9 @@ int main(int argc, char** argv) {
       elog("Exiting with error:\n${e}", ("e", unhandled_exception->to_detail_string()));
       node->shutdown();
       delete node;
+#ifdef _WIN32
+      witness_node::console_close_handled();
+#endif
       return EXIT_FAILURE;
    }
 }

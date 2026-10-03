@@ -140,6 +140,46 @@ void shutdown_watcher::start( std::function<void(const std::string&)> on_shutdow
    } );
 }
 
+namespace {
+
+// Process-wide and never freed: a handler thread Windows started may still use them while main returns
+std::function<void(const std::string&)>* console_on_close = nullptr;
+HANDLE console_done = nullptr;
+
+BOOL WINAPI console_handler( DWORD type )
+{
+   const char* what;
+   switch( type )
+   {
+   case CTRL_CLOSE_EVENT: what = "console window was closed"; break;
+   case CTRL_BREAK_EVENT: what = "Ctrl+Break pressed"; break;
+   default: return FALSE; // Ctrl+C stays with the SIGINT handler
+   }
+   (*console_on_close)( what );
+   WaitForSingleObject( console_done, INFINITE );
+   return TRUE;
+}
+
+} // anonymous namespace
+
+void install_console_close_handler( std::function<void(const std::string&)> on_close )
+{
+   if( console_on_close != nullptr )
+      return;
+   console_done = CreateEventW( nullptr, TRUE, FALSE, nullptr );
+   if( console_done == nullptr )
+      throw last_error( "Cannot create the console shutdown event" );
+   console_on_close = new std::function<void(const std::string&)>( std::move( on_close ) );
+   if( !SetConsoleCtrlHandler( console_handler, TRUE ) )
+      throw last_error( "Cannot install the console handler" );
+}
+
+void console_close_handled()
+{
+   if( console_done != nullptr )
+      SetEvent( console_done );
+}
+
 } } // graphene::witness_node
 
 #endif // _WIN32
