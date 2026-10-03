@@ -68,16 +68,24 @@ fn save_settings(st: State<AppState>, settings: Settings) -> Result<(), String> 
     Ok(())
 }
 
+/// Opens a file or folder in Explorer; a missing one gets a clear message instead of a shell error
+fn open_existing(app: &AppHandle, path: &std::path::Path, lang: &str) -> Result<(), String> {
+    if !path.exists() {
+        return Err(i18n::trf(lang, "err.not_found", &[("path", path.display().to_string())]));
+    }
+    app.opener().open_path(path.display().to_string(), None::<&str>).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn open_data_dir(app: AppHandle, st: State<AppState>) -> Result<(), String> {
-    let dir = st.sup.settings().data_dir;
-    app.opener().open_path(dir.display().to_string(), None::<&str>).map_err(|e| e.to_string())
+    let s = st.sup.settings();
+    open_existing(&app, &s.data_dir, &s.language)
 }
 
 #[tauri::command]
 fn open_log(app: AppHandle, st: State<AppState>) -> Result<(), String> {
-    let log = st.sup.settings().log_path();
-    app.opener().open_path(log.display().to_string(), None::<&str>).map_err(|e| e.to_string())
+    let s = st.sup.settings();
+    open_existing(&app, &s.log_path(), &s.language)
 }
 
 #[tauri::command]
