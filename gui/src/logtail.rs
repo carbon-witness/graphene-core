@@ -27,6 +27,8 @@ pub struct LogStage {
     pub replay_percent: Option<f64>,
     pub chain_id: Option<String>,
     pub last_block: Option<u64>,
+    /// The node's last "Shutdown: <step>" line, while it is stopping
+    pub shutdown_step: Option<String>,
 }
 
 pub struct LogTail {
@@ -108,7 +110,10 @@ fn update_stage(st: &mut LogStage, line: &str) {
             Regex::new(r"Got block: #(\d+)").unwrap(),
         ]
     });
-    if line.contains("Opening object database") {
+    if let Some(i) = line.find("] Shutdown: ") {
+        let step = &line[i + "] Shutdown: ".len()..];
+        st.shutdown_step = Some(step.split('\t').next().unwrap_or(step).trim().to_string());
+    } else if line.contains("Opening object database") {
         *st = LogStage { stage: "opening".into(), ..LogStage::default() };
     } else if line.contains("Replaying blocks") {
         st.stage = "replaying".into();
@@ -159,6 +164,13 @@ mod tests {
         assert_eq!(st.stage, "started");
         assert_eq!(st.last_block, Some(230000));
         assert_eq!(st.chain_id.as_deref().map(|s| &s[..8]), Some("7fcf452d"));
+    }
+
+    #[test]
+    fn notes_shutdown_steps() {
+        let mut st = LogStage::default();
+        update_stage(&mut st, "2026-10-03T19:13:58 th_a:?unnamed?  shutdown info  ] Shutdown: closing the chain database\t\t\tapplication.cpp:1226");
+        assert_eq!(st.shutdown_step.as_deref(), Some("closing the chain database"));
     }
 
     #[test]

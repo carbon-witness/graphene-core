@@ -244,9 +244,11 @@ int main(int argc, char** argv) {
 #ifdef _WIN32
       shutdown_watcher.reset();
 #endif
+      ilog("Shutdown: stopping plugins");
       node->shutdown_plugins();
       node->shutdown();
       delete node;
+      ilog("Shutdown: done, exiting the process");
 #ifdef _WIN32
       witness_node::console_close_handled();
 #endif

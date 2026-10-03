@@ -154,7 +154,7 @@ fn ask_on_close(app: AppHandle) {
         .message(tr(&lang, "dlg.close"))
         .title("Graphene Node")
         .kind(MessageDialogKind::Info)
-        .buttons(MessageDialogButtons::OkCancelCustom(tr(&lang, "dlg.close_stop"), tr(&lang, "dlg.close_background")))
+        .buttons(MessageDialogButtons::OkCancelCustom(tr(&lang, "tray.quit"), tr(&lang, "dlg.close_background")))
         .show(move |stop| {
             if stop {
                 if let Some(w) = a.get_webview_window("main") {

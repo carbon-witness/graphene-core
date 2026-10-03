@@ -1027,7 +1027,9 @@ application::~application()
    if( my->_p2p_network )
    {
       my->_p2p_network->close();
+      ilog( "Shutdown: releasing the P2P node" );
       my->_p2p_network.reset();
+      ilog( "Shutdown: P2P node released" );
    }
    if( my->_chain_db )
    {
@@ -1219,13 +1221,20 @@ void application::shutdown()
    if( my->_websocket_server )
       my->_websocket_server.reset();
    my->stop_network_items();
+   // Each step is logged: a slow shutdown then shows in the log where it is spending its time
    if( my->_p2p_network )
+   {
+      ilog( "Shutdown: closing the P2P network" );
       my->_p2p_network->close();
+      ilog( "Shutdown: P2P network closed" );
+   }
    if( my->_chain_db )
    {
       my->wait_for_network_items();
+      ilog( "Shutdown: closing the chain database" );
       my->_chain_db->close();
       my->_chain_db = nullptr;
+      ilog( "Shutdown: chain database closed" );
    }
 }
 

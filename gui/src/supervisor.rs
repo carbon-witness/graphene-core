@@ -253,7 +253,9 @@ impl Supervisor {
                 i.log.poll();
                 // Also while starting: without a file log (no logging.ini) the API is the only sign of readiness.
                 // Until the database is open the port refuses connections at once, so asking early is cheap.
-                let up = i.node.is_some() && matches!(i.phase, Phase::Starting | Phase::Running | Phase::Stopping);
+                // Not while stopping: the node's websocket server waits for its clients to close their
+                // connections, so ours is dropped as soon as the stop begins.
+                let up = i.node.is_some() && matches!(i.phase, Phase::Starting | Phase::Running);
                 if !up {
                     i.chain = None;
                     i.chain_updated = None;
@@ -393,6 +395,7 @@ impl Inner {
             Some(ev) => ev.set(),
             None => Err(tr(&self.settings.language, "err.no_event")),
         };
+        self.log.stage.shutdown_step = None;
         match result {
             Ok(()) => self.set_phase(Phase::Stopping),
             Err(_) => self.set_phase(Phase::StopTimedOut),
@@ -484,7 +487,10 @@ impl Inner {
                 ),
                 (None, _) => tr(lang, "status.waiting_api"),
             },
-            Phase::Stopping => tr(lang, "status.stopping"),
+            Phase::Stopping => match &self.log.stage.shutdown_step {
+                Some(step) => format!("{} · {step}", tr(lang, "status.stopping")),
+                None => tr(lang, "status.stopping"),
+            },
             Phase::StopTimedOut => tr(lang, "status.stop_timeout"),
             Phase::WaitingRestart => trf(lang, "status.restart_in", &[("s", restart_in.unwrap_or(0).to_string())]),
             Phase::Failed => tr(lang, "status.failed"),
@@ -509,7 +515,8 @@ impl Inner {
             api_stale_seconds: self
                 .chain_updated
                 .map(|t| t.elapsed().as_secs())
-                .filter(|s| *s >= 6 && self.chain.is_some()),
+                // While stopping, the node closes its API first, so silence there is expected
+                .filter(|s| *s >= 6 && self.chain.is_some() && self.phase == Phase::Running),
             lag_seconds: lag,
             sync_percent,
             synced,
