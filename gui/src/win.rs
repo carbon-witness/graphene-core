@@ -145,3 +145,9 @@ pub fn find_processes(exe_name: &str) -> Vec<u32> {
     }
     pids
 }
+
+/// A plain Windows error box with OK, usable before any window of the app exists.
+pub fn error_box(title: &str, text: &str) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK, MB_SETFOREGROUND};
+    unsafe { MessageBoxW(std::ptr::null_mut(), wide(text).as_ptr(), wide(title).as_ptr(), MB_OK | MB_ICONERROR | MB_SETFOREGROUND) };
+}
