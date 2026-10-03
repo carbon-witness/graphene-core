@@ -7,8 +7,10 @@ pub enum Glyph {
     Play,
     /// Yellow: the node is stopped
     Pause,
-    /// Blue-cyan: starting, syncing or stopping
+    /// Blue-cyan: the restart action (button and tray menu)
     Restart,
+    /// A plain yellow disc, no white: starting, syncing or stopping (the tray icon)
+    Busy,
     /// Red: crashed, stuck or someone else's node
     Cross,
 }
@@ -17,7 +19,7 @@ impl Glyph {
     pub fn for_status_color(color: &str) -> Glyph {
         match color {
             "green" => Glyph::Play,
-            "yellow" => Glyph::Restart,
+            "yellow" => Glyph::Busy,
             "red" => Glyph::Cross,
             _ => Glyph::Pause,
         }
@@ -26,7 +28,7 @@ impl Glyph {
     fn rgb(self) -> [f32; 3] {
         match self {
             Glyph::Play => [0x2e as f32, 0xa0 as f32, 0x43 as f32],
-            Glyph::Pause => [0xe0 as f32, 0xa1 as f32, 0x00 as f32],
+            Glyph::Pause | Glyph::Busy => [0xe0 as f32, 0xa1 as f32, 0x00 as f32],
             Glyph::Restart => [0x1c as f32, 0x9b as f32, 0xd6 as f32],
             Glyph::Cross => [0xd1 as f32, 0x24 as f32, 0x2f as f32],
         }
@@ -34,7 +36,10 @@ impl Glyph {
 
     /// Whether the point (u, v) in [-1, 1]², v pointing down, is on the glyph.
     fn covers(self, u: f32, v: f32) -> bool {
+        // The shapes below are drawn at 1/GLYPH_SCALE of their final size; the scale keeps them inside the rim
+        let (u, v) = (u / GLYPH_SCALE, v / GLYPH_SCALE);
         match self {
+            Glyph::Busy => true,
             Glyph::Play => in_triangle((u, v), (-0.26, -0.42), (-0.26, 0.42), (0.46, 0.0)),
             Glyph::Pause => v.abs() <= 0.38 && ((-0.32..=-0.09).contains(&u) || (0.09..=0.32).contains(&u)),
             Glyph::Restart => {
@@ -51,6 +56,9 @@ impl Glyph {
         }
     }
 }
+
+/// How much the glyphs are enlarged inside the circle: legible at the tray's 16 px, clear of the rim
+const GLYPH_SCALE: f32 = 1.45;
 
 fn in_triangle(p: (f32, f32), a: (f32, f32), b: (f32, f32), c: (f32, f32)) -> bool {
     let side = |p: (f32, f32), q: (f32, f32), r: (f32, f32)| (p.0 - r.0) * (q.1 - r.1) - (q.0 - r.0) * (p.1 - r.1);
@@ -113,7 +121,7 @@ mod dump {
     #[test]
     fn dump_glyphs() {
         let Ok(dir) = std::env::var("GLYPH_DUMP") else { return };
-        for (name, g) in [("play", super::Glyph::Play), ("pause", super::Glyph::Pause), ("restart", super::Glyph::Restart), ("cross", super::Glyph::Cross)] {
+        for (name, g) in [("play", super::Glyph::Play), ("pause", super::Glyph::Pause), ("restart", super::Glyph::Restart), ("cross", super::Glyph::Cross), ("busy", super::Glyph::Busy)] {
             for size in [16u32, 32, 64] {
                 std::fs::write(format!("{dir}/{name}-{size}.rgba"), super::rgba(g, size)).unwrap();
             }
