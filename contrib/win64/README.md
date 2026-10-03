@@ -21,7 +21,6 @@ Wine runs the build's own helpers (`cat-parts`, `embed_genesis`) through `wine-r
 | `mingw-w64-x86_64.cmake` | CMake toolchain: `-posix` MinGW compilers, static link, `-mbig-obj`, Wine as emulator |
 | `build-deps.sh` | Clones the dependencies at fixed tags and installs them as static libraries |
 | `build.sh` | Configures and builds the node with the toolchain |
-| `fc-windows.patch` | Fixes `libraries/fc` needs for this build; apply in graphene-fc with `git am` until fc carries them |
 | `wine-run.sh` | Runs a build helper under Wine, rewriting `/abs/path` arguments to `Z:/abs/path` |
 
 ## Stopping the node from a GUI
