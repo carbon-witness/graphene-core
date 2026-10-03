@@ -31,8 +31,8 @@ fn get_log(st: State<AppState>, cursor: u64) -> Vec<(u64, String)> {
 }
 
 #[tauri::command]
-fn node_start(st: State<AppState>) -> Result<(), String> {
-    st.sup.start()
+fn node_start(app: AppHandle, st: State<AppState>) -> Result<(), String> {
+    report(&app, st.sup.start())
 }
 
 #[tauri::command]
@@ -41,8 +41,26 @@ fn node_stop(st: State<AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn node_restart(st: State<AppState>) -> Result<(), String> {
-    st.sup.restart()
+fn node_restart(app: AppHandle, st: State<AppState>) -> Result<(), String> {
+    report(&app, st.sup.restart())
+}
+
+/// A start that fails (another node running, port taken, node missing) gets an error box with OK, so it is
+/// clear why nothing happened; the window also keeps it under "Last event".
+fn report(app: &AppHandle, result: Result<(), String>) -> Result<(), String> {
+    if let Err(e) = &result {
+        error_dialog(app, e.clone());
+    }
+    result
+}
+
+fn error_dialog(app: &AppHandle, message: String) {
+    app.dialog()
+        .message(message)
+        .title("Graphene Node")
+        .kind(MessageDialogKind::Error)
+        .buttons(MessageDialogButtons::Ok)
+        .show(|_| {});
 }
 
 #[tauri::command]
@@ -230,7 +248,7 @@ fn build_tray(app: &AppHandle, lang: &str) -> tauri::Result<(TrayIcon, TrayItems
                 _ => Ok(()),
             };
             if let Err(e) = result {
-                app.dialog().message(e).title("Graphene Node").kind(MessageDialogKind::Error).show(|_| {});
+                error_dialog(app, e);
             }
         })
         .on_tray_icon_event(|tray, ev| {
@@ -284,7 +302,9 @@ fn main() {
             let start_now = settings.start_node_with_app;
             let sup = Supervisor::start_new(settings);
             if start_now && !sup.is_node_running() {
-                sup.start().ok(); // a missing node shows up in the window's status
+                if let Err(e) = sup.start() {
+                    error_dialog(app.handle(), e);
+                }
             }
             app.manage(AppState { sup, settings_path });
             let lang = app.state::<AppState>().sup.settings().language;

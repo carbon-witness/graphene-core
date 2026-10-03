@@ -119,9 +119,9 @@ function renderStatus(s) {
   $("lastexit").textContent = s.last_exit || "—";
 }
 
-$("btn-start").onclick = () => call("node_start");
+$("btn-start").onclick = () => invoke("node_start").catch(() => {}); // a failure opens an error box
 $("btn-stop").onclick = () => call("node_stop");
-$("btn-restart").onclick = () => call("node_restart");
+$("btn-restart").onclick = () => invoke("node_restart").catch(() => {}); // a failure opens an error box
 $("btn-kill").onclick = async () => {
   if (await ask(t("dlg.kill"), { title: "Graphene Node", kind: "warning" })) call("node_kill");
 };
