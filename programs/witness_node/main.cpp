@@ -50,6 +50,8 @@
 #include <iomanip>
 #include <iostream>
 
+#include "data_dir_lock.hpp"
+
 #ifdef WIN32
 # include <signal.h>
 #else
@@ -66,6 +68,8 @@ using namespace graphene;
 namespace bpo = boost::program_options;
 
 int main(int argc, char** argv) {
+   // Outlives the node, including the error path below, which closes the database after leaving the try block
+   witness_node::data_dir_lock data_lock;
    app::application* node = new app::application();
    fc::oexception unhandled_exception;
    try {
@@ -171,6 +175,15 @@ int main(int argc, char** argv) {
          if( data_dir.is_relative() )
             data_dir = fc::current_path() / data_dir;
       }
+
+      // Before the configuration and the database are touched
+      std::string lock_error;
+      if( !data_lock.acquire( data_dir.string(), lock_error ) )
+      {
+         std::cerr << lock_error << "\n";
+         return witness_node::EXIT_DATA_DIR_IN_USE;
+      }
+
       app::load_configuration_options(data_dir, cfg_options, options);
 
       std::set<std::string> plugins;
