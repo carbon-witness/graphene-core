@@ -240,7 +240,8 @@ $("btn-open-log").onclick = () => call("open_log");
 const form = $("settings-form");
 function rpcIsLocal(ep) { return /^(127\.0\.0\.1|localhost):\d+$/.test(ep.trim()); }
 async function loadSettings() {
-  const [s, langs] = await Promise.all([call("get_settings"), call("get_languages")]);
+  const [s, langs, autostart] = await Promise.all([call("get_settings"), call("get_languages"), call("get_autostart")]);
+  form.autostart.checked = autostart;
   form.language.replaceChildren(...langs.map(([code, name]) => new Option(name, code, false, code === s.language)));
   form.node_exe.value = s.node_exe;
   form.data_dir.value = s.data_dir;
@@ -261,6 +262,8 @@ form.addEventListener("submit", async (e) => {
     language: form.language.value,
   };
   await call("save_settings", { settings });
+  // The startup entry lives in the Windows registry, not in the settings file
+  if (form.autostart.checked !== (await call("get_autostart"))) await call("set_autostart", { enabled: form.autostart.checked });
   if (settings.language !== before.language) await setLanguage(settings.language);
   $("saved").textContent = t("settings.saved");
   setTimeout(() => ($("saved").textContent = ""), 3000);

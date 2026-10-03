@@ -13,8 +13,8 @@ named event it passes as `--shutdown-event`.
     apt-get install g++-mingw-w64-x86-64-posix wine64   # wine only for the tests
     cargo build --release --target x86_64-pc-windows-gnu
 
-Output in `target/x86_64-pc-windows-gnu/release/`: `graphene-node.exe` (the app) and `supervisor-cli.exe`.
-Ship `graphene-node.exe` with `WebView2Loader.dll` (from the `webview2-com-sys` crate, `x64/`) and
+Output in `target/x86_64-pc-windows-gnu/release/`: `graphene-node-gui.exe` (the app) and `supervisor-cli.exe`.
+Ship `graphene-node-gui.exe` with `WebView2Loader.dll` (from the `webview2-com-sys` crate, `x64/`) and
 `witness_node.exe` in one folder; by default the app looks for the node and `witness_node_data_dir` next to itself.
 
 ## Tests

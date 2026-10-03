@@ -57,6 +57,7 @@
   "settings.rpc": "Адрес RPC (--rpc-endpoint)",
   "settings.rpc_warning": "Адрес не 127.0.0.1: API ноды будет доступен из сети.",
   "settings.start_with_app": "Запускать ноду вместе с приложением",
+  "settings.autostart": "Добавить в автозагрузку (запуск в трее)",
   "settings.language": "Язык",
   "settings.hint": "Опции ноды применяются при её следующем запуске. Остальные настройки ноды — в config.ini в папке данных.",
   "settings.save": "Сохранить",

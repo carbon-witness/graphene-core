@@ -77,3 +77,9 @@ form label { display: flex; flex-direction: column; gap: 4px; color: var(--muted
 form label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--text); }
 form select { align-self: flex-start; min-width: 200px; }
 .hint { color: var(--muted); font-size: 12px; margin: 0; }
+
+/* Start, stop and restart: one width, a player glyph before the text */
+.actions .act { min-width: 9.5em; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.ico { width: 15px; height: 15px; flex: none; }
+.ico.play { fill: #2ea043; } .ico.pause { fill: #e0a100; }
+.ico.restart { fill: #1c9bd6; stroke: #1c9bd6; }
