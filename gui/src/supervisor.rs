@@ -24,6 +24,10 @@ const MAX_CRASHES: usize = 3;
 /// Head this close to the wall clock counts as synced
 const SYNCED_LAG_SECS: i64 = 60;
 const LOCK_FILE: &str = "graphene-node-gui.lock";
+/// The node's last shutdown step before its process ends (witness_node main.cpp)
+const SHUTDOWN_DONE: &str = "done, exiting the process";
+/// How long after the stop request a node that logged SHUTDOWN_DONE may take to exit before it is ended
+const EXIT_GRACE: Duration = Duration::from_secs(10);
 /// witness_node's exit code when another node holds its data directory (data_dir_lock.hpp)
 const EXIT_DATA_DIR_IN_USE: u32 = 3;
 
@@ -472,6 +476,16 @@ impl Inner {
         }
         match self.phase {
             Phase::Starting if self.log.stage.stage == "started" || self.chain.is_some() => self.set_phase(Phase::Running),
+            // The node logged that it closed everything and is exiting, yet the process lingers: ending it
+            // loses nothing, the database is closed already
+            Phase::Stopping | Phase::StopTimedOut
+                if self.log.stage.shutdown_step.as_deref() == Some(SHUTDOWN_DONE)
+                    && self.phase_since.elapsed() > EXIT_GRACE =>
+            {
+                if let Some(n) = &self.node {
+                    n.process.terminate().ok();
+                }
+            }
             Phase::Stopping if self.phase_since.elapsed() > STOP_TIMEOUT => self.set_phase(Phase::StopTimedOut),
             Phase::WaitingRestart if self.restart_at.is_some_and(|t| Instant::now() >= t) => {
                 if let Err(e) = self.start_node() {
