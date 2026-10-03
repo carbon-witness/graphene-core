@@ -5,7 +5,7 @@ project( BitShares LANGUAGES CXX C)
 set( BLOCKCHAIN_NAME "Graphene" )
 
 # Release version, printed by --version. Bump it together with the graphene-<version> tag.
-set( GRAPHENE_VERSION "1.2.0" )
+set( GRAPHENE_VERSION "1.2.1" )
 
 set( CLI_CLIENT_EXECUTABLE_NAME graphene_client )
 set( GUI_CLIENT_EXECUTABLE_NAME BitShares )
