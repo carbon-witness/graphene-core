@@ -25,6 +25,7 @@
 
 #include "shutdown_watcher.hpp"
 
+#include <cstdio>
 #include <stdexcept>
 #include <vector>
 
@@ -178,6 +179,18 @@ void console_close_handled()
 {
    if( console_done != nullptr )
       SetEvent( console_done );
+}
+
+void pause_if_console_closes_on_exit()
+{
+   DWORD processes[2];
+   DWORD mode = 0;
+   if( GetConsoleProcessList( processes, 2 ) != 1 || GetConsoleWindow() == nullptr
+       || !GetConsoleMode( GetStdHandle( STD_INPUT_HANDLE ), &mode ) )
+      return;
+   std::fputs( "\nPress Enter to close this window.", stderr );
+   std::fflush( stderr );
+   std::getchar();
 }
 
 } } // graphene::witness_node
