@@ -1,0 +1,272 @@
+// No console window behind the app
+#![windows_subsystem = "windows"]
+
+use node_gui::settings::Settings;
+use node_gui::supervisor::{Phase, Status, Supervisor, STOP_TIMEOUT};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+use tauri::image::Image;
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::{TrayIcon, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Manager, State, WindowEvent, Wry};
+use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_opener::OpenerExt;
+
+struct AppState {
+    sup: Arc<Supervisor>,
+    settings_path: PathBuf,
+}
+
+#[tauri::command]
+fn get_status(st: State<AppState>) -> Status {
+    st.sup.status()
+}
+
+#[tauri::command]
+fn get_log(st: State<AppState>, cursor: u64) -> Vec<(u64, String)> {
+    st.sup.log_lines(cursor, 2000)
+}
+
+#[tauri::command]
+fn node_start(st: State<AppState>) -> Result<(), String> {
+    st.sup.start()
+}
+
+#[tauri::command]
+fn node_stop(st: State<AppState>) -> Result<(), String> {
+    st.sup.stop()
+}
+
+#[tauri::command]
+fn node_restart(st: State<AppState>) -> Result<(), String> {
+    st.sup.restart()
+}
+
+#[tauri::command]
+fn node_kill(st: State<AppState>) -> Result<(), String> {
+    st.sup.kill()
+}
+
+#[tauri::command]
+fn get_settings(st: State<AppState>) -> Settings {
+    st.sup.settings()
+}
+
+#[tauri::command]
+fn save_settings(st: State<AppState>, settings: Settings) -> Result<(), String> {
+    settings.save(&st.settings_path)?;
+    st.sup.set_settings(settings);
+    Ok(())
+}
+
+#[tauri::command]
+fn open_data_dir(app: AppHandle, st: State<AppState>) -> Result<(), String> {
+    let dir = st.sup.settings().data_dir;
+    app.opener().open_path(dir.display().to_string(), None::<&str>).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn open_log(app: AppHandle, st: State<AppState>) -> Result<(), String> {
+    let log = st.sup.settings().log_path();
+    app.opener().open_path(log.display().to_string(), None::<&str>).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn copy_rpc(app: AppHandle, st: State<AppState>) -> Result<(), String> {
+    let ep = st.sup.settings().rpc_endpoint;
+    app.clipboard().write_text(format!("ws://{ep}")).map_err(|e| e.to_string())
+}
+
+/// A filled circle in the status colour, drawn at runtime so there are no icon files to keep in sync.
+fn status_icon(color: &str) -> Image<'static> {
+    let (r, g, b) = match color {
+        "green" => (0x2e, 0xa0, 0x43),
+        "yellow" => (0xe0, 0xa1, 0x00),
+        "red" => (0xd1, 0x24, 0x2f),
+        _ => (0x8c, 0x95, 0x9f),
+    };
+    const N: u32 = 32;
+    let mut px = Vec::with_capacity((N * N * 4) as usize);
+    let c = (N as f32 - 1.0) / 2.0;
+    for y in 0..N {
+        for x in 0..N {
+            let d = ((x as f32 - c).powi(2) + (y as f32 - c).powi(2)).sqrt();
+            // 1 px of anti-aliasing at the edge
+            let a = ((13.5 - d).clamp(0.0, 1.0) * 255.0) as u8;
+            px.extend_from_slice(&[r, g, b, a]);
+        }
+    }
+    Image::new_owned(px, N, N)
+}
+
+fn show_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        w.show().ok();
+        w.unminimize().ok();
+        w.set_focus().ok();
+    }
+}
+
+/// "Выход": stops the node explicitly, never by ending the process tree.
+fn quit(app: AppHandle) {
+    std::thread::spawn(move || {
+        let sup = app.state::<AppState>().sup.clone();
+        if sup.is_node_running() {
+            sup.stop().ok();
+            if !sup.wait_stopped(STOP_TIMEOUT) {
+                let kill = app
+                    .dialog()
+                    .message("Нода не остановилась за 60 секунд.\n\nОстановить её принудительно? При следующем запуске нода проведёт replay базы.")
+                    .title("Graphene Node")
+                    .kind(MessageDialogKind::Warning)
+                    .buttons(MessageDialogButtons::OkCancelCustom("Остановить принудительно".into(), "Подождать".into()))
+                    .blocking_show();
+                if !kill {
+                    return;
+                }
+                sup.kill().ok();
+                sup.wait_stopped(Duration::from_secs(10));
+            }
+        }
+        app.exit(0);
+    });
+}
+
+struct TrayItems {
+    status: MenuItem<Wry>,
+    start: MenuItem<Wry>,
+    stop: MenuItem<Wry>,
+    restart: MenuItem<Wry>,
+}
+
+fn build_tray(app: &AppHandle) -> tauri::Result<(TrayIcon, TrayItems)> {
+    let item = |id: &str, text: &str, enabled: bool| MenuItem::with_id(app, id, text, enabled, None::<&str>);
+    let sep = || PredefinedMenuItem::separator(app);
+    let items = TrayItems {
+        status: item("status", "Нода остановлена", false)?,
+        start: item("start", "Запустить ноду", true)?,
+        stop: item("stop", "Остановить ноду", false)?,
+        restart: item("restart", "Перезапустить ноду", false)?,
+    };
+    let menu = Menu::with_items(
+        app,
+        &[
+            &items.status,
+            &sep()?,
+            &item("open", "Открыть панель", true)?,
+            &sep()?,
+            &items.start,
+            &items.stop,
+            &items.restart,
+            &sep()?,
+            &item("copy_rpc", "Скопировать адрес RPC", true)?,
+            &item("open_data", "Открыть папку данных", true)?,
+            &item("open_log", "Открыть лог", true)?,
+            &sep()?,
+            &item("quit", "Выход (остановить ноду)", true)?,
+        ],
+    )?;
+    let tray = TrayIconBuilder::with_id("main")
+        .icon(status_icon("gray"))
+        .tooltip("Graphene Node")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, ev| {
+            let st = app.state::<AppState>();
+            let result = match ev.id().as_ref() {
+                "open" => {
+                    show_main(app);
+                    Ok(())
+                }
+                "start" => st.sup.start(),
+                "stop" => st.sup.stop(),
+                "restart" => st.sup.restart(),
+                "copy_rpc" => copy_rpc(app.clone(), st.clone()),
+                "open_data" => open_data_dir(app.clone(), st.clone()),
+                "open_log" => open_log(app.clone(), st.clone()),
+                "quit" => {
+                    quit(app.clone());
+                    Ok(())
+                }
+                _ => Ok(()),
+            };
+            if let Err(e) = result {
+                app.dialog().message(e).title("Graphene Node").kind(MessageDialogKind::Error).show(|_| {});
+            }
+        })
+        .on_tray_icon_event(|tray, ev| {
+            if let TrayIconEvent::DoubleClick { .. } = ev {
+                show_main(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    Ok((tray, items))
+}
+
+/// Keeps the tray icon, tooltip and menu in step with the node.
+fn tray_updates(app: AppHandle, tray: TrayIcon, items: TrayItems) {
+    std::thread::spawn(move || {
+        let sup = app.state::<AppState>().sup.clone();
+        let mut last_color = "";
+        loop {
+            let s = sup.status();
+            if s.color != last_color {
+                tray.set_icon(Some(status_icon(s.color))).ok();
+                last_color = s.color;
+            }
+            tray.set_tooltip(Some(format!("Graphene Node — {}", s.summary))).ok();
+            items.status.set_text(format!("● {}", s.summary)).ok();
+            let running = s.pid.is_some();
+            items.start.set_enabled(!running && s.phase != Phase::Stopping).ok();
+            items.stop.set_enabled(running || matches!(s.phase, Phase::WaitingRestart | Phase::Failed)).ok();
+            items.restart.set_enabled(running).ok();
+            std::thread::sleep(Duration::from_secs(1));
+        }
+    });
+}
+
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let settings_path = app.path().app_config_dir()?.join("settings.json");
+            let settings = Settings::load(&settings_path);
+            let start_now = settings.start_node_with_app;
+            let sup = Supervisor::start_new(settings);
+            if start_now && !sup.is_node_running() {
+                sup.start().ok(); // a missing node shows up in the window's status
+            }
+            app.manage(AppState { sup, settings_path });
+            let (tray, items) = build_tray(app.handle())?;
+            tray_updates(app.handle().clone(), tray, items);
+            show_main(app.handle());
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Closing the window keeps the app and the node running in the tray
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                window.hide().ok();
+            }
+        })
+        .invoke_handler(tauri::generate_handler![
+            get_status,
+            get_log,
+            node_start,
+            node_stop,
+            node_restart,
+            node_kill,
+            get_settings,
+            save_settings,
+            open_data_dir,
+            open_log,
+            copy_rpc
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running the app");
+}

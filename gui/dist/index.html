@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graphene Node</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span id="dot" class="dot gray"></span><span id="summary">Загрузка…</span></div>
+  <nav>
+    <button class="tab active" data-tab="dash">Дашборд</button>
+    <button class="tab" data-tab="journal">Журнал</button>
+    <button class="tab" data-tab="settings">Настройки</button>
+  </nav>
+</header>
+
+<main>
+  <section id="dash" class="page active">
+    <div id="alert" class="alert hidden"></div>
+    <div class="actions">
+      <button id="btn-start" class="primary">Запустить</button>
+      <button id="btn-stop">Остановить</button>
+      <button id="btn-restart">Перезапустить</button>
+      <button id="btn-kill" class="danger hidden">Остановить принудительно</button>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-label"><span id="progress-title">Синхронизация</span><span id="progress-value">—</span></div>
+      <div class="progress"><div id="progress-bar"></div></div>
+    </div>
+
+    <div class="grid">
+      <div class="card"><div class="k">Блок</div><div class="v" id="head">—</div></div>
+      <div class="card"><div class="k">Необратимый</div><div class="v" id="irr">—</div></div>
+      <div class="card"><div class="k">Отставание</div><div class="v" id="lag">—</div></div>
+      <div class="card"><div class="k">Блоков в минуту</div><div class="v" id="rate">—</div></div>
+    </div>
+
+    <dl class="facts">
+      <dt>Chain ID</dt><dd><code id="chain">—</code></dd>
+      <dt>RPC</dt><dd><code id="rpc">—</code> <button class="link" id="btn-copy">скопировать</button></dd>
+      <dt>Папка данных</dt><dd><code id="datadir">—</code> <button class="link" id="btn-open-data">открыть</button></dd>
+      <dt>Процесс</dt><dd id="proc">—</dd>
+      <dt>Последнее событие</dt><dd id="lastexit">—</dd>
+    </dl>
+  </section>
+
+  <section id="journal" class="page">
+    <div class="journal-status" id="jstatus">Последний блок: —</div>
+    <div class="toolbar">
+      <div class="seg">
+        <button class="mode active" data-mode="raw">Сырой лог</button>
+        <button class="mode" data-mode="blocks">Блоки</button>
+      </div>
+      <input id="filter" type="search" placeholder="Поиск по тексту">
+      <label><input type="checkbox" id="hide-blocks"> скрыть «Got block»</label>
+      <span class="spacer"></span>
+      <button id="btn-copy-log">Копировать</button>
+      <button id="btn-open-log">Открыть лог</button>
+    </div>
+    <div id="feed" class="feed"></div>
+    <table id="blocks" class="blocks hidden">
+      <thead><tr><th>Блок</th><th>Время</th><th>Витнесс</th><th>tx</th><th>Задержка</th><th>До необратимого</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button id="btn-latest" class="latest hidden">↓ к последним</button>
+  </section>
+
+  <section id="settings" class="page">
+    <form id="settings-form">
+      <label>Путь к witness_node.exe<input name="node_exe" required></label>
+      <label>Папка данных<input name="data_dir" required></label>
+      <label>Адрес RPC (--rpc-endpoint)<input name="rpc_endpoint" required pattern="[^\s:]+:\d{1,5}"></label>
+      <div id="rpc-warning" class="alert hidden">Адрес не 127.0.0.1: API ноды будет доступен из сети.</div>
+      <label class="check"><input type="checkbox" name="start_node_with_app"> Запускать ноду вместе с приложением</label>
+      <p class="hint">Опции применяются при следующем запуске ноды. Остальные настройки ноды — в config.ini в папке данных.</p>
+      <button class="primary" type="submit">Сохранить</button>
+      <span id="saved" class="hint"></span>
+    </form>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

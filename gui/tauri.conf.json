@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Graphene Node",
+  "version": "0.1.0",
+  "identifier": "org.graphene.node-gui",
+  "build": { "frontendDist": "dist" },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      { "label": "main", "title": "Graphene Node", "width": 980, "height": 680, "minWidth": 720, "minHeight": 480, "visible": false }
+    ],
+    "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'" }
+  },
+  "bundle": { "active": false, "icon": ["icons/icon.png", "icons/icon.ico"] }
+}
