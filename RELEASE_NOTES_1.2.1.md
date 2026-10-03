@@ -1,6 +1,6 @@
 # graphene-core 1.2.1
 
-**Date:** October 2026
+**Date:** October 4, 2026
 **Branch:** `feature/windows-witness-node` ([carbon-witness/graphene-core](https://github.com/carbon-witness/graphene-core/tree/feature/windows-witness-node))
 **Tag:** `graphene-1.2.1`
 **Previous version:** 1.2.0 — tag `graphene-1.2.0` (September 27, 2026), [release notes](RELEASE_NOTES_1.2.0.md)
