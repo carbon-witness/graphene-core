@@ -165,6 +165,11 @@ fn quit(app: AppHandle) {
                 sup.wait_stopped(Duration::from_secs(10));
             }
         }
+        // Windows keeps the icon of an exited app in the tray until the mouse passes over it; remove it first
+        if let Some(tray) = app.tray_by_id("main") {
+            tray.set_visible(false).ok();
+        }
+        app.remove_tray_by_id("main");
         app.exit(0);
     });
 }
