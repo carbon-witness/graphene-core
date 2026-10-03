@@ -1,4 +1,4 @@
-add_executable( witness_node main.cpp shutdown_watcher.cpp )
+add_executable( witness_node main.cpp shutdown_watcher.cpp data_dir_lock.cpp )
 if( UNIX AND NOT APPLE )
   set(rt_library rt )
 endif()
