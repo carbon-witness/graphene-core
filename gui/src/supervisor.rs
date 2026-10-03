@@ -24,6 +24,8 @@ const MAX_CRASHES: usize = 3;
 /// Head this close to the wall clock counts as synced
 const SYNCED_LAG_SECS: i64 = 60;
 const LOCK_FILE: &str = "graphene-node-gui.lock";
+/// witness_node's exit code when another node holds its data directory (data_dir_lock.hpp)
+const EXIT_DATA_DIR_IN_USE: u32 = 3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -50,6 +52,8 @@ struct LockFile {
 #[derive(Clone)]
 enum LastEvent {
     Exited(Option<u32>),
+    /// The node refused to start: another node holds its data folder
+    DataDirInUse,
     GaveUp(Option<u32>),
     Error(String),
 }
@@ -60,6 +64,7 @@ impl LastEvent {
             LastEvent::Exited(code) => trf(lang, "last.exit", &[("what", describe_exit(lang, *code))]),
             LastEvent::GaveUp(code) => trf(lang, "last.gave_up", &[("what", describe_exit(lang, *code))]),
             LastEvent::Error(e) => e.clone(),
+            LastEvent::DataDirInUse => tr(lang, "err.data_dir_in_use"),
         }
     }
 }
@@ -436,6 +441,13 @@ impl Inner {
             }
             return;
         }
+        if code == Some(EXIT_DATA_DIR_IN_USE) {
+            // Not a crash: restarting cannot help while the other node runs
+            self.want_running = false;
+            self.last_exit = Some(LastEvent::DataDirInUse);
+            self.set_phase(Phase::Failed);
+            return;
+        }
         let now = Instant::now();
         self.crashes.retain(|t| now.duration_since(*t) < CRASH_WINDOW);
         self.crashes.push(now);
@@ -511,7 +523,10 @@ impl Inner {
             },
             Phase::StopTimedOut => tr(lang, "status.stop_timeout"),
             Phase::WaitingRestart => trf(lang, "status.restart_in", &[("s", restart_in.unwrap_or(0).to_string())]),
-            Phase::Failed => tr(lang, "status.failed"),
+            Phase::Failed => match self.last_exit {
+                Some(LastEvent::DataDirInUse) => tr(lang, "status.data_dir_in_use"),
+                _ => tr(lang, "status.failed"),
+            },
         };
         let color = match self.phase {
             Phase::Stopped => "gray",
