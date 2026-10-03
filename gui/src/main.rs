@@ -285,6 +285,8 @@ fn tray_updates(app: AppHandle, tray: TrayIcon, items: TrayItems) {
         let sup = app.state::<AppState>().sup.clone();
         let mut last_glyph = "";
         let mut last_lang = sup.settings().language;
+        let mut last_summary = String::new();
+        let mut last_enabled = None;
         loop {
             let lang = sup.settings().language;
             if lang != last_lang {
@@ -298,12 +300,22 @@ fn tray_updates(app: AppHandle, tray: TrayIcon, items: TrayItems) {
                 tray.set_icon(Some(glyph_image(Glyph::from_name(s.glyph), 32))).ok();
                 last_glyph = s.glyph;
             }
-            tray.set_tooltip(Some(format!("Graphene Node — {}", s.summary))).ok();
-            items.status.set_text(format!("● {}", s.summary)).ok();
+            // Only on change: every tray update is a round trip through Explorer
+            if s.summary != last_summary {
+                tray.set_tooltip(Some(format!("Graphene Node — {}", s.summary))).ok();
+                items.status.set_text(format!("● {}", s.summary)).ok();
+                last_summary = s.summary.clone();
+            }
             let running = s.pid.is_some();
-            items.start.set_enabled(!running && s.phase != Phase::Stopping).ok();
-            items.stop.set_enabled(running || matches!(s.phase, Phase::WaitingRestart | Phase::Failed)).ok();
-            items.restart.set_enabled(running).ok();
+            let enabled = (!running && s.phase != Phase::Stopping,
+                           running || matches!(s.phase, Phase::WaitingRestart | Phase::Failed),
+                           running);
+            if Some(enabled) != last_enabled {
+                items.start.set_enabled(enabled.0).ok();
+                items.stop.set_enabled(enabled.1).ok();
+                items.restart.set_enabled(enabled.2).ok();
+                last_enabled = Some(enabled);
+            }
             std::thread::sleep(Duration::from_secs(1));
         }
     });
