@@ -5,6 +5,8 @@ pub mod glyphs;
 pub mod i18n;
 pub mod logtail;
 pub mod rpc;
+#[cfg(windows)]
+pub mod session_end;
 pub mod settings;
 pub mod supervisor;
 #[cfg(windows)]

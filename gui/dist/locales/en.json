@@ -105,5 +105,6 @@
   "dlg.kill_button": "Force stop",
   "dlg.wait_button": "Wait",
   "dlg.close": "Stop the node and close the app, or keep the node running in the background?",
-  "dlg.close_background": "Keep running in background"
+  "dlg.close_background": "Keep running in background",
+  "shutdown.reason": "Stopping the Graphene node so that its database stays intact…"
 }
