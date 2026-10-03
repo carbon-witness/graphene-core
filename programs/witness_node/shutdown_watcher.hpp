@@ -63,6 +63,20 @@ private:
    std::thread _thread;
 };
 
+/**
+ * Turns closing the console window and Ctrl+Break into a clean exit, like Ctrl+C.
+ *
+ * Windows ends the process as soon as the console handler returns (for a closed window, after about 5 s
+ * at most), so the handler calls on_close and then blocks until console_close_handled() says the node has
+ * shut down. on_close is called from a thread Windows creates, possibly more than once.
+ * Logoff and system shutdown are not covered: Windows does not send them to a console program that loads
+ * user32.dll, as this one does.
+ */
+void install_console_close_handler( std::function<void(const std::string&)> on_close );
+
+/// Call once the node has shut down; releases a pending console handler so Windows can end the process.
+void console_close_handled();
+
 } } // graphene::witness_node
 
 #endif // _WIN32
