@@ -1,4 +1,4 @@
-add_executable( witness_node main.cpp )
+add_executable( witness_node main.cpp shutdown_watcher.cpp )
 if( UNIX AND NOT APPLE )
   set(rt_library rt )
 endif()

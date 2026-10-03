@@ -56,6 +56,12 @@
 # include <csignal>
 #endif
 
+#ifdef _WIN32
+# include <memory>
+# include <fc/asio.hpp>
+# include "shutdown_watcher.hpp"
+#endif
+
 using namespace graphene;
 namespace bpo = boost::program_options;
 
@@ -74,6 +80,13 @@ int main(int argc, char** argv) {
                             ->default_value("witness account_history market_history grouped_orders api_helper_indexes"),
                     "Space-separated list of plugins to activate")
             ("ignore-api-helper-indexes-warning", "Do not exit if api_helper_indexes plugin is not enabled.");
+#ifdef _WIN32
+      app_options.add_options()
+            ("shutdown-event", bpo::value<std::string>(),
+                    "Name of an existing Windows event; exit cleanly when it is signalled")
+            ("parent-pid", bpo::value<uint32_t>(),
+                    "Process ID to watch; exit cleanly when that process exits");
+#endif
 
       bpo::variables_map options;
 
@@ -133,6 +146,24 @@ int main(int argc, char** argv) {
          return 0;
       }
 
+#ifdef _WIN32
+      std::unique_ptr<witness_node::shutdown_watcher> shutdown_watcher;
+      if( options.count("shutdown-event") || options.count("parent-pid") )
+      {
+         try
+         {
+            shutdown_watcher = std::make_unique<witness_node::shutdown_watcher>(
+                  options.count("shutdown-event") ? options["shutdown-event"].as<std::string>() : std::string(),
+                  options.count("parent-pid") ? options["parent-pid"].as<uint32_t>() : 0 );
+         }
+         catch( const std::runtime_error& e )
+         {
+            std::cerr << e.what() << "\n";
+            return 1;
+         }
+      }
+#endif
+
       fc::path data_dir;
       if( options.count("data-dir") )
       {
@@ -185,11 +216,25 @@ int main(int argc, char** argv) {
          exit_promise->set_value(signal);
       }, SIGTERM);
 
+#ifdef _WIN32
+      if( shutdown_watcher )
+         shutdown_watcher->start( [exit_promise]( const std::string& reason ) {
+            // Called from the watcher's own thread; hand over to the asio thread like the signal handlers above
+            boost::asio::post( fc::asio::default_io_service(), [exit_promise, reason]() {
+               elog( "${r}, attempting to exit cleanly", ("r", reason) );
+               exit_promise->set_value(SIGTERM);
+            } );
+         } );
+#endif
+
       ilog("Started Graphene node on a chain with ${h} blocks.", ("h", node->chain_database()->head_block_num()));
       ilog("Chain ID is ${id}", ("id", node->chain_database()->get_chain_id()) );
 
       int signal = exit_promise->wait();
       ilog("Exiting from signal ${n}", ("n", signal));
+#ifdef _WIN32
+      shutdown_watcher.reset();
+#endif
       node->shutdown_plugins();
       node->shutdown();
       delete node;
