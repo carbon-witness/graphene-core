@@ -10,12 +10,14 @@ use std::time::{Duration, Instant};
 fn show(sup: &Supervisor) -> node_gui::supervisor::Status {
     let s = sup.status();
     println!(
-        "{:?} {} pid={:?} attached={} clean_stop={} | {}{}",
+        "{:?} {} pid={:?} attached={} clean_stop={} head={:?} stale={:?} | {}{}",
         s.phase,
         s.color,
         s.pid,
         s.attached,
         s.can_stop_cleanly,
+        s.chain.as_ref().map(|c| c.head_block),
+        s.api_stale_seconds,
         s.summary,
         s.last_exit.as_deref().map(|e| format!(" | last: {e}")).unwrap_or_default()
     );
@@ -33,6 +35,7 @@ fn main() {
         data_dir: a[2].clone().into(),
         rpc_endpoint: a[3].clone(),
         start_node_with_app: false,
+        ..Settings::default()
     };
     let sup = Supervisor::start_new(settings);
     std::thread::sleep(Duration::from_millis(700));

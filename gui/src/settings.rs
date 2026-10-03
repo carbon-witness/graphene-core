@@ -11,6 +11,8 @@ pub struct Settings {
     /// Passed as --rpc-endpoint; anything but 127.0.0.1 opens the API to the network
     pub rpc_endpoint: String,
     pub start_node_with_app: bool,
+    /// UI language code, see i18n.rs
+    pub language: String,
 }
 
 impl Default for Settings {
@@ -25,6 +27,7 @@ impl Default for Settings {
             data_dir: dir.join("witness_node_data_dir"),
             rpc_endpoint: "127.0.0.1:8090".into(),
             start_node_with_app: true,
+            language: crate::i18n::DEFAULT_LANG.into(),
         }
     }
 }

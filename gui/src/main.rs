@@ -1,6 +1,7 @@
 // No console window behind the app
 #![windows_subsystem = "windows"]
 
+use node_gui::i18n::{self, tr};
 use node_gui::settings::Settings;
 use node_gui::supervisor::{Phase, Status, Supervisor, STOP_TIMEOUT};
 use std::path::PathBuf;
@@ -47,6 +48,12 @@ fn node_restart(st: State<AppState>) -> Result<(), String> {
 #[tauri::command]
 fn node_kill(st: State<AppState>) -> Result<(), String> {
     st.sup.kill()
+}
+
+/// [code, name] pairs for the language picker
+#[tauri::command]
+fn get_languages() -> Vec<(String, String)> {
+    i18n::languages()
 }
 
 #[tauri::command]
@@ -116,12 +123,16 @@ fn quit(app: AppHandle) {
         if sup.is_node_running() {
             sup.stop().ok();
             if !sup.wait_stopped(STOP_TIMEOUT) {
+                let lang = sup.settings().language;
                 let kill = app
                     .dialog()
-                    .message("Нода не остановилась за 60 секунд.\n\nОстановить её принудительно? При следующем запуске нода проведёт replay базы.")
+                    .message(tr(&lang, "dlg.quit_kill"))
                     .title("Graphene Node")
                     .kind(MessageDialogKind::Warning)
-                    .buttons(MessageDialogButtons::OkCancelCustom("Остановить принудительно".into(), "Подождать".into()))
+                    .buttons(MessageDialogButtons::OkCancelCustom(
+                        tr(&lang, "dlg.kill_button"),
+                        tr(&lang, "dlg.wait_button"),
+                    ))
                     .blocking_show();
                 if !kill {
                     return;
@@ -134,40 +145,58 @@ fn quit(app: AppHandle) {
     });
 }
 
+/// "Stop and close" quits like the tray's Quit; "Keep running in background" (or dismissing the dialog,
+/// which leaves the node alone) hides the window to the tray.
+fn ask_on_close(app: AppHandle) {
+    let lang = app.state::<AppState>().sup.settings().language;
+    let a = app.clone();
+    app.dialog()
+        .message(tr(&lang, "dlg.close"))
+        .title("Graphene Node")
+        .kind(MessageDialogKind::Info)
+        .buttons(MessageDialogButtons::OkCancelCustom(tr(&lang, "dlg.close_stop"), tr(&lang, "dlg.close_background")))
+        .show(move |stop| {
+            if stop {
+                if let Some(w) = a.get_webview_window("main") {
+                    w.hide().ok();
+                }
+                quit(a);
+            } else if let Some(w) = a.get_webview_window("main") {
+                w.hide().ok();
+            }
+        });
+}
+
 struct TrayItems {
     status: MenuItem<Wry>,
     start: MenuItem<Wry>,
     stop: MenuItem<Wry>,
     restart: MenuItem<Wry>,
+    /// Every item with a fixed label and its translation key, relabelled when the language changes
+    labelled: Vec<(MenuItem<Wry>, String)>,
 }
 
-fn build_tray(app: &AppHandle) -> tauri::Result<(TrayIcon, TrayItems)> {
-    let item = |id: &str, text: &str, enabled: bool| MenuItem::with_id(app, id, text, enabled, None::<&str>);
-    let sep = || PredefinedMenuItem::separator(app);
-    let items = TrayItems {
-        status: item("status", "Нода остановлена", false)?,
-        start: item("start", "Запустить ноду", true)?,
-        stop: item("stop", "Остановить ноду", false)?,
-        restart: item("restart", "Перезапустить ноду", false)?,
+fn build_tray(app: &AppHandle, lang: &str) -> tauri::Result<(TrayIcon, TrayItems)> {
+    // The menu id doubles as the translation key "tray.<id>"
+    let item = |id: &str, enabled: bool| {
+        MenuItem::with_id(app, id, tr(lang, &format!("tray.{id}")), enabled, None::<&str>)
     };
+    let sep = || PredefinedMenuItem::separator(app);
+    let status = MenuItem::with_id(app, "status", tr(lang, "status.stopped"), false, None::<&str>)?;
+    let (open, start, stop, restart) = (item("open", true)?, item("start", true)?, item("stop", false)?, item("restart", false)?);
+    let (copy, data, log, quit_item) =
+        (item("copy_rpc", true)?, item("open_data", true)?, item("open_log", true)?, item("quit", true)?);
     let menu = Menu::with_items(
         app,
         &[
-            &items.status,
-            &sep()?,
-            &item("open", "Открыть панель", true)?,
-            &sep()?,
-            &items.start,
-            &items.stop,
-            &items.restart,
-            &sep()?,
-            &item("copy_rpc", "Скопировать адрес RPC", true)?,
-            &item("open_data", "Открыть папку данных", true)?,
-            &item("open_log", "Открыть лог", true)?,
-            &sep()?,
-            &item("quit", "Выход (остановить ноду)", true)?,
+            &status, &sep()?, &open, &sep()?, &start, &stop, &restart, &sep()?, &copy, &data, &log, &sep()?, &quit_item,
         ],
     )?;
+    let labelled = [&open, &start, &stop, &restart, &copy, &data, &log, &quit_item]
+        .into_iter()
+        .map(|m| (m.clone(), format!("tray.{}", m.id().as_ref())))
+        .collect();
+    let items = TrayItems { status, start, stop, restart, labelled };
     let tray = TrayIconBuilder::with_id("main")
         .icon(status_icon("gray"))
         .tooltip("Graphene Node")
@@ -210,7 +239,15 @@ fn tray_updates(app: AppHandle, tray: TrayIcon, items: TrayItems) {
     std::thread::spawn(move || {
         let sup = app.state::<AppState>().sup.clone();
         let mut last_color = "";
+        let mut last_lang = sup.settings().language;
         loop {
+            let lang = sup.settings().language;
+            if lang != last_lang {
+                for (item, key) in &items.labelled {
+                    item.set_text(tr(&lang, key)).ok();
+                }
+                last_lang = lang;
+            }
             let s = sup.status();
             if s.color != last_color {
                 tray.set_icon(Some(status_icon(s.color))).ok();
@@ -242,21 +279,23 @@ fn main() {
                 sup.start().ok(); // a missing node shows up in the window's status
             }
             app.manage(AppState { sup, settings_path });
-            let (tray, items) = build_tray(app.handle())?;
+            let lang = app.state::<AppState>().sup.settings().language;
+            let (tray, items) = build_tray(app.handle(), &lang)?;
             tray_updates(app.handle().clone(), tray, items);
             show_main(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Closing the window keeps the app and the node running in the tray
+            // The window's close button asks whether to stop the node or keep it running in the tray
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                window.hide().ok();
+                ask_on_close(window.app_handle().clone());
             }
         })
         .invoke_handler(tauri::generate_handler![
             get_status,
             get_log,
+            get_languages,
             node_start,
             node_stop,
             node_restart,

@@ -6,7 +6,10 @@ use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HANDLE, WAIT_TIMEOUT};
+use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HANDLE, INVALID_HANDLE_VALUE, WAIT_TIMEOUT};
+use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+};
 use windows_sys::Win32::System::Threading::{
     CreateEventW, GetExitCodeProcess, OpenEventW, OpenProcess, QueryFullProcessImageNameW, SetEvent,
     TerminateProcess, WaitForSingleObject, CREATE_NO_WINDOW, EVENT_MODIFY_STATE,
@@ -120,4 +123,25 @@ impl Event {
         }
         Ok(())
     }
+}
+
+/// PIDs of running processes whose executable file name is `exe_name` (case-insensitive).
+pub fn find_processes(exe_name: &str) -> Vec<u32> {
+    let mut pids = Vec::new();
+    let snap = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if snap == INVALID_HANDLE_VALUE {
+        return pids;
+    }
+    let _snap = Handle(snap);
+    let mut e: PROCESSENTRY32W = unsafe { std::mem::zeroed() };
+    e.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+    let mut ok = unsafe { Process32FirstW(snap, &mut e) } != 0;
+    while ok {
+        let len = e.szExeFile.iter().position(|&c| c == 0).unwrap_or(e.szExeFile.len());
+        if String::from_utf16_lossy(&e.szExeFile[..len]).eq_ignore_ascii_case(exe_name) {
+            pids.push(e.th32ProcessID);
+        }
+        ok = unsafe { Process32NextW(snap, &mut e) } != 0;
+    }
+    pids
 }

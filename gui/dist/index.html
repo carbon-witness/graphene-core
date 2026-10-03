@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,76 +8,84 @@
 </head>
 <body>
 <header>
-  <div class="brand"><span id="dot" class="dot gray"></span><span id="summary">Загрузка…</span></div>
-  <nav>
-    <button class="tab active" data-tab="dash">Дашборд</button>
-    <button class="tab" data-tab="journal">Журнал</button>
-    <button class="tab" data-tab="settings">Настройки</button>
-  </nav>
+  <div class="brand"><span id="dot" class="dot gray"></span><span id="summary" data-i18n="app.loading">Loading…</span></div>
+  <div class="actions">
+    <button id="btn-start" class="primary" data-i18n="btn.start">Start</button>
+    <button id="btn-stop" data-i18n="btn.stop">Stop</button>
+    <button id="btn-restart" data-i18n="btn.restart">Restart</button>
+    <button id="btn-kill" class="danger hidden" data-i18n="btn.kill">Force stop</button>
+  </div>
 </header>
+<nav class="tabs">
+  <button class="tab active" data-tab="dash" data-i18n="tab.dashboard">Dashboard</button>
+  <button class="tab" data-tab="journal" data-i18n="tab.journal">Journal</button>
+  <button class="tab" data-tab="settings" data-i18n="tab.settings">Settings</button>
+</nav>
 
 <main>
-  <section id="dash" class="page active">
-    <div id="alert" class="alert hidden"></div>
-    <div class="actions">
-      <button id="btn-start" class="primary">Запустить</button>
-      <button id="btn-stop">Остановить</button>
-      <button id="btn-restart">Перезапустить</button>
-      <button id="btn-kill" class="danger hidden">Остановить принудительно</button>
-    </div>
+  <div id="alert" class="alert hidden"></div>
 
+  <section id="dash" class="page active">
     <div class="progress-wrap">
-      <div class="progress-label"><span id="progress-title">Синхронизация</span><span id="progress-value">—</span></div>
+      <div class="progress-label"><span id="progress-title" data-i18n="dash.sync">Sync</span><span id="progress-value">—</span></div>
       <div class="progress"><div id="progress-bar"></div></div>
     </div>
 
     <div class="grid">
-      <div class="card"><div class="k">Блок</div><div class="v" id="head">—</div></div>
-      <div class="card"><div class="k">Необратимый</div><div class="v" id="irr">—</div></div>
-      <div class="card"><div class="k">Отставание</div><div class="v" id="lag">—</div></div>
-      <div class="card"><div class="k">Блоков в минуту</div><div class="v" id="rate">—</div></div>
+      <div class="card"><div class="k" data-i18n="dash.block">Block</div><div class="v" id="head">—</div></div>
+      <div class="card"><div class="k" data-i18n="dash.irreversible">Irreversible</div><div class="v" id="irr">—</div></div>
+      <div class="card"><div class="k" data-i18n="dash.lag">Behind</div><div class="v" id="lag">—</div></div>
+      <div class="card"><div class="k" data-i18n="dash.rate">Blocks per minute</div><div class="v" id="rate">—</div></div>
     </div>
 
     <dl class="facts">
-      <dt>Chain ID</dt><dd><code id="chain">—</code></dd>
-      <dt>RPC</dt><dd><code id="rpc">—</code> <button class="link" id="btn-copy">скопировать</button></dd>
-      <dt>Папка данных</dt><dd><code id="datadir">—</code> <button class="link" id="btn-open-data">открыть</button></dd>
-      <dt>Процесс</dt><dd id="proc">—</dd>
-      <dt>Последнее событие</dt><dd id="lastexit">—</dd>
+      <dt data-i18n="dash.chain_id">Chain ID</dt><dd><code id="chain">—</code></dd>
+      <dt data-i18n="dash.rpc">RPC</dt><dd><code id="rpc">—</code> <button class="link" id="btn-copy" data-i18n="dash.copy">copy</button></dd>
+      <dt data-i18n="dash.data_dir">Data folder</dt><dd><code id="datadir">—</code> <button class="link" id="btn-open-data" data-i18n="dash.open">open</button></dd>
+      <dt data-i18n="dash.process">Process</dt><dd id="proc">—</dd>
+      <dt data-i18n="dash.last_event">Last event</dt><dd id="lastexit">—</dd>
     </dl>
   </section>
 
   <section id="journal" class="page">
-    <div class="journal-status" id="jstatus">Последний блок: —</div>
+    <div class="journal-status" id="jstatus" data-i18n="journal.none">Last block: —</div>
     <div class="toolbar">
       <div class="seg">
-        <button class="mode active" data-mode="raw">Сырой лог</button>
-        <button class="mode" data-mode="blocks">Блоки</button>
+        <button class="mode active" data-mode="raw" data-i18n="journal.raw">Raw log</button>
+        <button class="mode" data-mode="blocks" data-i18n="journal.blocks">Blocks</button>
       </div>
-      <input id="filter" type="search" placeholder="Поиск по тексту">
-      <label><input type="checkbox" id="hide-blocks"> скрыть «Got block»</label>
+      <select id="level">
+        <option value="all" data-i18n="journal.level_all">All levels</option>
+        <option value="warn" data-i18n="journal.level_warn">Warnings and errors</option>
+        <option value="error" data-i18n="journal.level_error">Errors only</option>
+      </select>
+      <input id="filter" type="search" data-i18n-placeholder="journal.search" placeholder="Search text">
+      <label class="inline"><input type="checkbox" id="hide-blocks"> <span data-i18n="journal.hide_blocks">hide “Got block”</span></label>
       <span class="spacer"></span>
-      <button id="btn-copy-log">Копировать</button>
-      <button id="btn-open-log">Открыть лог</button>
+      <button id="btn-copy-log" data-i18n="journal.copy">Copy</button>
+      <button id="btn-open-log" data-i18n="journal.open_log">Open log</button>
     </div>
     <div id="feed" class="feed"></div>
     <table id="blocks" class="blocks hidden">
-      <thead><tr><th>Блок</th><th>Время</th><th>Витнесс</th><th>tx</th><th>Задержка</th><th>До необратимого</th></tr></thead>
+      <thead><tr>
+        <th data-i18n="col.block">Block</th><th data-i18n="col.time">Time</th><th data-i18n="col.witness">Witness</th>
+        <th data-i18n="col.tx">tx</th><th data-i18n="col.latency">Latency</th><th data-i18n="col.to_irreversible">To irreversible</th>
+      </tr></thead>
       <tbody></tbody>
     </table>
-    <button id="btn-latest" class="latest hidden">↓ к последним</button>
+    <button id="btn-latest" class="latest hidden"></button>
   </section>
 
   <section id="settings" class="page">
     <form id="settings-form">
-      <label>Путь к witness_node.exe<input name="node_exe" required></label>
-      <label>Папка данных<input name="data_dir" required></label>
-      <label>Адрес RPC (--rpc-endpoint)<input name="rpc_endpoint" required pattern="[^\s:]+:\d{1,5}"></label>
-      <div id="rpc-warning" class="alert hidden">Адрес не 127.0.0.1: API ноды будет доступен из сети.</div>
-      <label class="check"><input type="checkbox" name="start_node_with_app"> Запускать ноду вместе с приложением</label>
-      <p class="hint">Опции применяются при следующем запуске ноды. Остальные настройки ноды — в config.ini в папке данных.</p>
-      <button class="primary" type="submit">Сохранить</button>
-      <span id="saved" class="hint"></span>
+      <label><span data-i18n="settings.language">Language</span><select name="language"></select></label>
+      <label><span data-i18n="settings.node_exe">Path to witness_node.exe</span><input name="node_exe" required></label>
+      <label><span data-i18n="settings.data_dir">Data folder</span><input name="data_dir" required></label>
+      <label><span data-i18n="settings.rpc">RPC address (--rpc-endpoint)</span><input name="rpc_endpoint" required pattern="[^\s:]+:\d{1,5}"></label>
+      <div id="rpc-warning" class="alert hidden" data-i18n="settings.rpc_warning"></div>
+      <label class="check"><input type="checkbox" name="start_node_with_app"> <span data-i18n="settings.start_with_app">Start the node with the app</span></label>
+      <p class="hint" data-i18n="settings.hint"></p>
+      <div><button class="primary" type="submit" data-i18n="settings.save">Save</button> <span id="saved" class="hint"></span></div>
     </form>
   </section>
 </main>
