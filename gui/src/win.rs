@@ -151,3 +151,47 @@ pub fn error_box(title: &str, text: &str) {
     use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK, MB_SETFOREGROUND};
     unsafe { MessageBoxW(std::ptr::null_mut(), wide(text).as_ptr(), wide(title).as_ptr(), MB_OK | MB_ICONERROR | MB_SETFOREGROUND) };
 }
+
+/// "Start with Windows": the per-user Run key, so no administrator rights are needed
+const RUN_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+const RUN_VALUE: &str = "Graphene Node";
+/// Passed by the Run entry: the app then starts in the tray, without its window
+pub const AUTOSTART_ARG: &str = "--autostart";
+
+/// The command line Windows runs at logon, if the app is registered.
+pub fn autostart_command() -> Option<String> {
+    use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_SZ};
+    let mut buf = vec![0u16; 2048];
+    let mut bytes = (buf.len() * 2) as u32;
+    let rc = unsafe {
+        RegGetValueW(HKEY_CURRENT_USER, wide(RUN_KEY).as_ptr(), wide(RUN_VALUE).as_ptr(), RRF_RT_REG_SZ,
+                     std::ptr::null_mut(), buf.as_mut_ptr().cast(), &mut bytes)
+    };
+    if rc != 0 {
+        return None;
+    }
+    let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+    Some(String::from_utf16_lossy(&buf[..len]))
+}
+
+/// Registers this executable to start at logon, or removes the entry.
+pub fn set_autostart(enabled: bool) -> Result<(), String> {
+    use windows_sys::Win32::System::Registry::{RegDeleteKeyValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_SZ};
+    let rc = if enabled {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let cmd = wide(&format!("\"{}\" {AUTOSTART_ARG}", exe.display()));
+        unsafe {
+            RegSetKeyValueW(HKEY_CURRENT_USER, wide(RUN_KEY).as_ptr(), wide(RUN_VALUE).as_ptr(), REG_SZ,
+                            cmd.as_ptr().cast(), (cmd.len() * 2) as u32)
+        }
+    } else {
+        match unsafe { RegDeleteKeyValueW(HKEY_CURRENT_USER, wide(RUN_KEY).as_ptr(), wide(RUN_VALUE).as_ptr()) } {
+            2 => 0, // ERROR_FILE_NOT_FOUND: already off
+            rc => rc,
+        }
+    };
+    if rc != 0 {
+        return Err(format!("Cannot change the Windows startup entry (Windows error {rc})"));
+    }
+    Ok(())
+}

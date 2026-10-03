@@ -6,7 +6,7 @@ description = "Tray supervisor and dashboard for witness_node on Windows"
 license = "MIT"
 
 [[bin]]
-name = "graphene-node"
+name = "graphene-node-gui"
 path = "src/main.rs"
 
 # Runs the supervisor without the window, for tests under Wine (no WebView2 there)
@@ -36,6 +36,7 @@ windows-sys = { version = "0.59", features = [
   "Win32_System_Threading",
   "Win32_System_Diagnostics_ToolHelp",
   "Win32_UI_WindowsAndMessaging",
+  "Win32_System_Registry",
 ] }
 
 [build-dependencies]

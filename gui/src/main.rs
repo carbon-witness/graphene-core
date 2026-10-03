@@ -8,7 +8,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::image::Image;
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use node_gui::glyphs::{self, Glyph};
+use tauri::menu::{IconMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, State, WindowEvent, Wry};
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -68,6 +69,16 @@ fn node_kill(st: State<AppState>) -> Result<(), String> {
     st.sup.kill()
 }
 
+#[tauri::command]
+fn get_autostart() -> bool {
+    node_gui::win::autostart_command().is_some()
+}
+
+#[tauri::command]
+fn set_autostart(enabled: bool) -> Result<(), String> {
+    node_gui::win::set_autostart(enabled)
+}
+
 /// [code, name] pairs for the language picker
 #[tauri::command]
 fn get_languages() -> Vec<(String, String)> {
@@ -112,26 +123,13 @@ fn copy_rpc(app: AppHandle, st: State<AppState>) -> Result<(), String> {
     app.clipboard().write_text(format!("ws://{ep}")).map_err(|e| e.to_string())
 }
 
-/// A filled circle in the status colour, drawn at runtime so there are no icon files to keep in sync.
+/// The tray icon: a white circle with the glyph of the node's state (see glyphs.rs)
+fn glyph_image(glyph: Glyph, size: u32) -> Image<'static> {
+    Image::new_owned(glyphs::rgba(glyph, size), size, size)
+}
+
 fn status_icon(color: &str) -> Image<'static> {
-    let (r, g, b) = match color {
-        "green" => (0x2e, 0xa0, 0x43),
-        "yellow" => (0xe0, 0xa1, 0x00),
-        "red" => (0xd1, 0x24, 0x2f),
-        _ => (0x8c, 0x95, 0x9f),
-    };
-    const N: u32 = 32;
-    let mut px = Vec::with_capacity((N * N * 4) as usize);
-    let c = (N as f32 - 1.0) / 2.0;
-    for y in 0..N {
-        for x in 0..N {
-            let d = ((x as f32 - c).powi(2) + (y as f32 - c).powi(2)).sqrt();
-            // 1 px of anti-aliasing at the edge
-            let a = ((13.5 - d).clamp(0.0, 1.0) * 255.0) as u8;
-            px.extend_from_slice(&[r, g, b, a]);
-        }
-    }
-    Image::new_owned(px, N, N)
+    glyph_image(Glyph::for_status_color(color), 32)
 }
 
 fn show_main(app: &AppHandle) {
@@ -195,11 +193,11 @@ fn ask_on_close(app: AppHandle) {
 
 struct TrayItems {
     status: MenuItem<Wry>,
-    start: MenuItem<Wry>,
-    stop: MenuItem<Wry>,
-    restart: MenuItem<Wry>,
+    start: IconMenuItem<Wry>,
+    stop: IconMenuItem<Wry>,
+    restart: IconMenuItem<Wry>,
     /// Every item with a fixed label and its translation key, relabelled when the language changes
-    labelled: Vec<(MenuItem<Wry>, String)>,
+    labelled: Vec<(Box<dyn Fn(String) + Send>, String)>,
 }
 
 fn build_tray(app: &AppHandle, lang: &str) -> tauri::Result<(TrayIcon, TrayItems)> {
@@ -209,7 +207,13 @@ fn build_tray(app: &AppHandle, lang: &str) -> tauri::Result<(TrayIcon, TrayItems
     };
     let sep = || PredefinedMenuItem::separator(app);
     let status = MenuItem::with_id(app, "status", tr(lang, "status.stopped"), false, None::<&str>)?;
-    let (open, start, stop, restart) = (item("open", true)?, item("start", true)?, item("stop", false)?, item("restart", false)?);
+    // The node's three actions carry the same glyphs as the window's buttons
+    let action = |id: &str, enabled: bool, glyph: Glyph| {
+        IconMenuItem::with_id(app, id, tr(lang, &format!("tray.{id}")), enabled, Some(glyph_image(glyph, 16)), None::<&str>)
+    };
+    let open = item("open", true)?;
+    let (start, stop, restart) =
+        (action("start", true, Glyph::Play)?, action("stop", false, Glyph::Pause)?, action("restart", false, Glyph::Restart)?);
     let (copy, data, log, quit_item) =
         (item("copy_rpc", true)?, item("open_data", true)?, item("open_log", true)?, item("quit", true)?);
     let menu = Menu::with_items(
@@ -218,10 +222,17 @@ fn build_tray(app: &AppHandle, lang: &str) -> tauri::Result<(TrayIcon, TrayItems
             &status, &sep()?, &open, &sep()?, &start, &stop, &restart, &sep()?, &copy, &data, &log, &sep()?, &quit_item,
         ],
     )?;
-    let labelled = [&open, &start, &stop, &restart, &copy, &data, &log, &quit_item]
-        .into_iter()
-        .map(|m| (m.clone(), format!("tray.{}", m.id().as_ref())))
-        .collect();
+    let mut labelled: Vec<(Box<dyn Fn(String) + Send>, String)> = Vec::new();
+    for m in [&open, &copy, &data, &log, &quit_item] {
+        let m = m.clone();
+        let key = format!("tray.{}", m.id().as_ref());
+        labelled.push((Box::new(move |t| { m.set_text(t).ok(); }), key));
+    }
+    for m in [&start, &stop, &restart] {
+        let m = m.clone();
+        let key = format!("tray.{}", m.id().as_ref());
+        labelled.push((Box::new(move |t| { m.set_text(t).ok(); }), key));
+    }
     let items = TrayItems { status, start, stop, restart, labelled };
     let tray = TrayIconBuilder::with_id("main")
         .icon(status_icon("gray"))
@@ -269,8 +280,8 @@ fn tray_updates(app: AppHandle, tray: TrayIcon, items: TrayItems) {
         loop {
             let lang = sup.settings().language;
             if lang != last_lang {
-                for (item, key) in &items.labelled {
-                    item.set_text(tr(&lang, key)).ok();
+                for (set_text, key) in &items.labelled {
+                    set_text(tr(&lang, key));
                 }
                 last_lang = lang;
             }
@@ -315,7 +326,12 @@ fn main() {
             let lang = app.state::<AppState>().sup.settings().language;
             let (tray, items) = build_tray(app.handle(), &lang)?;
             tray_updates(app.handle().clone(), tray, items);
-            show_main(app.handle());
+            // Started by Windows at logon: stay in the tray. Refresh the entry, in case the app was moved.
+            if std::env::args().any(|a| a == node_gui::win::AUTOSTART_ARG) {
+                node_gui::win::set_autostart(true).ok();
+            } else {
+                show_main(app.handle());
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -329,6 +345,8 @@ fn main() {
             get_status,
             get_log,
             get_languages,
+            get_autostart,
+            set_autostart,
             node_start,
             node_stop,
             node_restart,

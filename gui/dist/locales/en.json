@@ -57,6 +57,7 @@
   "settings.rpc": "RPC address (--rpc-endpoint)",
   "settings.rpc_warning": "Not 127.0.0.1: the node's API will be reachable from the network.",
   "settings.start_with_app": "Start the node with the app",
+  "settings.autostart": "Start with Windows (in the tray)",
   "settings.language": "Language",
   "settings.hint": "Node options take effect at the next start of the node. Other node settings are in config.ini in the data folder.",
   "settings.save": "Save",
