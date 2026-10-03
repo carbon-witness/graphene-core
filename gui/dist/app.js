@@ -14,6 +14,17 @@ const LEVEL = / (debug|info|warn|error) +\] /;
 const STARTS_ENTRY = /^\d{4}-\d\d-\d\dT/;
 const LEVEL_RANK = { debug: 0, info: 1, warn: 2, error: 3 };
 
+// The tray's glyphs (glyphs.rs), same shapes and colours: a white disc with a grey rim and a coloured sign,
+// or a plain yellow disc while the node starts, syncs or stops
+const DISC = '<circle cx="12" cy="12" r="10.9" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>';
+const GLYPH_SVG = {
+  play: `<svg viewBox="0 0 24 24">${DISC}<path d="M7.5 4.7v14.6L20 12z" fill="#2ea043"/></svg>`,
+  pause: `<svg viewBox="0 0 24 24">${DISC}<path d="M6.4 5.4h4v13.2h-4zM13.6 5.4h4v13.2h-4z" fill="#e0a100"/></svg>`,
+  busy: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11.5" fill="#e0a100"/></svg>',
+  cross: `<svg viewBox="0 0 24 24">${DISC}<path d="M6.3 6.3l11.4 11.4M17.7 6.3L6.3 17.7" stroke="#d1242f" stroke-width="3.2"/></svg>`,
+  restart: `<svg viewBox="0 0 24 24">${DISC}<path d="M17.05 9.87A5.48 5.48 0 1 1 12.66 6.56" fill="none" stroke="#1c9bd6" stroke-width="2.96"/><path d="M13.93 11.19L20.17 8.55L15.05 7.45z" fill="#1c9bd6"/></svg>`,
+};
+
 let status = null;
 let lines = [];          // [seq, text, level], already masked by the app
 let cursor = 0;
@@ -76,7 +87,10 @@ function blocksPerMinute() {
 }
 
 function renderStatus(s) {
-  $("dot").className = `dot ${s.color}`;
+  if ($("dot").dataset.glyph !== s.glyph) {
+    $("dot").dataset.glyph = s.glyph;
+    $("dot").innerHTML = GLYPH_SVG[s.glyph] || GLYPH_SVG.pause; // fixed markup below, no data in it
+  }
   $("summary").textContent = s.summary;
   const running = s.pid != null;
   $("btn-start").disabled = running || s.phase === "stopping";
