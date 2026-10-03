@@ -332,11 +332,22 @@ fn main() {
             }
             // Windows shutting down, restarting or logging off: stop the node cleanly first
             let lang = sup.settings().language;
-            let s2 = sup.clone();
-            node_gui::session_end::watch(&tr(&lang, "shutdown.reason"), move || {
-                s2.stop().ok();
-                s2.wait_stopped(SESSION_END_WAIT);
-            });
+            let (s_stop, s_start) = (sup.clone(), sup.clone());
+            node_gui::session_end::watch(
+                &tr(&lang, "shutdown.reason"),
+                settings_path.with_file_name("gui.log"),
+                node_gui::session_end::Actions {
+                    stop_node: Box::new(move || {
+                        let was_running = s_stop.is_node_running();
+                        s_stop.stop().ok();
+                        s_stop.wait_stopped(SESSION_END_WAIT);
+                        was_running
+                    }),
+                    start_node: Box::new(move || {
+                        s_start.start().ok();
+                    }),
+                },
+            );
             app.manage(AppState { sup, settings_path });
             let lang = app.state::<AppState>().sup.settings().language;
             let (tray, items) = build_tray(app.handle(), &lang)?;

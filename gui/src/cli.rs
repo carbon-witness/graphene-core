@@ -79,15 +79,27 @@ fn main() {
             }
         }
         "session" => {
-            // stays until Windows (or `wineboot --end-session`) ends the session, then stops the node
-            let s2 = sup.clone();
-            node_gui::session_end::watch("Stopping the Graphene node", move || {
-                println!("session ending: stopping the node");
-                s2.stop().ok();
-                let ok = s2.wait_stopped(Duration::from_secs(20));
-                show(&s2);
-                println!("stopped={ok}");
-            });
+            // stays until Windows (or a test) ends the session; the node is stopped on WM_QUERYENDSESSION
+            let (s_stop, s_start) = (sup.clone(), sup.clone());
+            node_gui::session_end::watch(
+                "Stopping the Graphene node",
+                std::path::PathBuf::from("gui.log"),
+                node_gui::session_end::Actions {
+                    stop_node: Box::new(move || {
+                        println!("session ending: stopping the node");
+                        let was = s_stop.is_node_running();
+                        s_stop.stop().ok();
+                        let ok = s_stop.wait_stopped(Duration::from_secs(20));
+                        show(&s_stop);
+                        println!("stopped={ok}");
+                        was
+                    }),
+                    start_node: Box::new(move || {
+                        println!("shutdown cancelled: starting the node again");
+                        s_start.start().ok();
+                    }),
+                },
+            );
             std::thread::sleep(Duration::from_secs(120));
         }
         "watch" => {
