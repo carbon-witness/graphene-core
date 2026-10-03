@@ -78,6 +78,18 @@ fn main() {
                 std::thread::sleep(Duration::from_secs(1));
             }
         }
+        "session" => {
+            // stays until Windows (or `wineboot --end-session`) ends the session, then stops the node
+            let s2 = sup.clone();
+            node_gui::session_end::watch("Stopping the Graphene node", move || {
+                println!("session ending: stopping the node");
+                s2.stop().ok();
+                let ok = s2.wait_stopped(Duration::from_secs(20));
+                show(&s2);
+                println!("stopped={ok}");
+            });
+            std::thread::sleep(Duration::from_secs(120));
+        }
         "watch" => {
             let n: u64 = a.get(5).and_then(|x| x.parse().ok()).unwrap_or(10);
             for _ in 0..n {

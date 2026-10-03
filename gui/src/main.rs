@@ -16,6 +16,9 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_opener::OpenerExt;
 
+/// How long Windows' shutdown is held for the node to stop; past it, the shutdown goes on regardless
+const SESSION_END_WAIT: Duration = Duration::from_secs(20);
+
 struct AppState {
     sup: Arc<Supervisor>,
     settings_path: PathBuf,
@@ -327,6 +330,13 @@ fn main() {
                     error_dialog(app.handle(), e);
                 }
             }
+            // Windows shutting down, restarting or logging off: stop the node cleanly first
+            let lang = sup.settings().language;
+            let s2 = sup.clone();
+            node_gui::session_end::watch(&tr(&lang, "shutdown.reason"), move || {
+                s2.stop().ok();
+                s2.wait_stopped(SESSION_END_WAIT);
+            });
             app.manage(AppState { sup, settings_path });
             let lang = app.state::<AppState>().sup.settings().language;
             let (tray, items) = build_tray(app.handle(), &lang)?;
