@@ -47,6 +47,8 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <websocketpp/version.hpp>
 
+#include <cstdio>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
 
@@ -274,6 +276,11 @@ int main(int argc, char** argv) {
       ilog("Shutdown: done, exiting the process");
 #ifdef _WIN32
       witness_node::console_close_handled();
+      // Everything that needs a clean close (database, P2P, the log, written with flush) is closed by now.
+      // On Windows the process was seen to hang after this point, in the runtime's static destructors and
+      // thread joins (network threads with live peers), long enough for the GUI to give up on it. End it here.
+      std::fflush( nullptr );
+      _exit( EXIT_SUCCESS );
 #endif
       return EXIT_SUCCESS;
    } catch( const fc::exception& e ) {
