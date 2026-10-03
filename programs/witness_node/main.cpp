@@ -82,6 +82,9 @@ static int startup_failed( int code )
 int main(int argc, char** argv) {
    // Outlives the node, including the error path below, which closes the database after leaving the try block
    witness_node::data_dir_lock data_lock;
+#ifdef _WIN32
+   witness_node::shut_down_last();
+#endif
    app::application* node = new app::application();
    fc::oexception unhandled_exception;
    try {

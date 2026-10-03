@@ -181,6 +181,11 @@ void console_close_handled()
       SetEvent( console_done );
 }
 
+void shut_down_last()
+{
+   SetProcessShutdownParameters( 0x100, 0 ); // the lowest level open to applications
+}
+
 void pause_if_console_closes_on_exit()
 {
    DWORD processes[2];

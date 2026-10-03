@@ -84,6 +84,9 @@ void console_close_handled();
  */
 void pause_if_console_closes_on_exit();
 
+/// Asks Windows to end this process last at shutdown, so a supervisor told earlier can stop it cleanly first.
+void shut_down_last();
+
 } } // graphene::witness_node
 
 #endif // _WIN32
