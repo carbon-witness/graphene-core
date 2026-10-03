@@ -77,6 +77,13 @@ void install_console_close_handler( std::function<void(const std::string&)> on_c
 /// Call once the node has shut down; releases a pending console handler so Windows can end the process.
 void console_close_handled();
 
+/**
+ * When the node was started by double-click, Windows gave it a console of its own that closes with the
+ * process, taking a startup error with it before it can be read. In that case only, waits for Enter.
+ * Not from cmd or PowerShell (the console stays) and not from the GUI (no visible console, no keyboard).
+ */
+void pause_if_console_closes_on_exit();
+
 } } // graphene::witness_node
 
 #endif // _WIN32

@@ -67,6 +67,16 @@
 using namespace graphene;
 namespace bpo = boost::program_options;
 
+// A startup error: shown, then the exit code. Started by double-click on Windows, the console would close with
+// the process before the error could be read, so it waits for Enter there.
+static int startup_failed( int code )
+{
+#ifdef _WIN32
+   witness_node::pause_if_console_closes_on_exit();
+#endif
+   return code;
+}
+
 int main(int argc, char** argv) {
    // Outlives the node, including the error path below, which closes the database after leaving the try block
    witness_node::data_dir_lock data_lock;
@@ -127,7 +137,7 @@ int main(int argc, char** argv) {
       catch (const boost::program_options::error& e)
       {
          std::cerr << "Error parsing command line: " << e.what() << "\n";
-         return 1;
+         return startup_failed( 1 );
       }
 
       if( options.count("version") )
@@ -163,7 +173,7 @@ int main(int argc, char** argv) {
          catch( const std::runtime_error& e )
          {
             std::cerr << e.what() << "\n";
-            return 1;
+            return startup_failed( 1 );
          }
       }
 #endif
@@ -181,7 +191,7 @@ int main(int argc, char** argv) {
       if( !data_lock.acquire( data_dir.string(), lock_error ) )
       {
          std::cerr << lock_error << "\n";
-         return witness_node::EXIT_DATA_DIR_IN_USE;
+         return startup_failed( witness_node::EXIT_DATA_DIR_IN_USE );
       }
 
       app::load_configuration_options(data_dir, cfg_options, options);
@@ -191,7 +201,7 @@ int main(int argc, char** argv) {
 
       if(plugins.count("account_history") && plugins.count("elasticsearch")) {
          std::cerr << "Plugin conflict: Cannot load both account_history plugin and elasticsearch plugin\n";
-         return 1;
+         return startup_failed( 1 );
       }
 
       if( !plugins.count("api_helper_indexes") && !options.count("ignore-api-helper-indexes-warning")
@@ -200,7 +210,7 @@ int main(int argc, char** argv) {
          std::cerr << "\nIf this is an API node, please enable api_helper_indexes plugin."
                       "\nIf this is not an API node, please start with \"--ignore-api-helper-indexes-warning\""
                       " or enable it in config.ini file.\n\n";
-         return 1;
+         return startup_failed( 1 );
       }
 
       std::for_each(plugins.begin(), plugins.end(), [node](const std::string& plug) mutable {
@@ -279,7 +289,7 @@ int main(int argc, char** argv) {
 #ifdef _WIN32
       witness_node::console_close_handled();
 #endif
-      return EXIT_FAILURE;
+      return startup_failed( EXIT_FAILURE );
    }
 }
 
