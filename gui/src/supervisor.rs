@@ -181,6 +181,11 @@ impl Supervisor {
         r
     }
 
+    /// Checked before the window opens: with a conflict the app shows the error and exits.
+    pub fn conflict(&self) -> Option<String> {
+        self.lock().conflict()
+    }
+
     pub fn stop(&self) -> Result<(), String> {
         self.lock().stop_node()
     }
@@ -326,6 +331,27 @@ impl Inner {
         }
     }
 
+    /// A node this app did not start (by hand, or by another copy of the app), or another program on the RPC
+    /// port: starting ours next to it would break both, as two nodes cannot share a data folder or port.
+    /// A node this app runs or found through the lock file is not a conflict.
+    fn conflict(&self) -> Option<String> {
+        let s = &self.settings;
+        let lang = s.language.as_str();
+        let ours = self.node.as_ref().map(|n| n.process.pid);
+        let exe_name = s.node_exe.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        if let Some(pid) = win::find_processes(&exe_name).into_iter().find(|p| Some(*p) != ours) {
+            return Some(trf(lang, "err.already_running", &[("exe", exe_name), ("pid", pid.to_string())]));
+        }
+        if ours.is_none() {
+            if let Ok(addr) = s.rpc_endpoint.parse::<std::net::SocketAddr>() {
+                if std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok() {
+                    return Some(trf(lang, "err.port_busy", &[("endpoint", s.rpc_endpoint.clone())]));
+                }
+            }
+        }
+        None
+    }
+
     fn start_node(&mut self) -> Result<(), String> {
         if self.node.is_some() {
             return Ok(());
@@ -336,17 +362,9 @@ impl Inner {
             self.want_running = false;
             return Err(trf(lang, "err.not_found", &[("path", s.node_exe.display().to_string())]));
         }
-        // A second node on the same data folder or port breaks both; the user may have started one by hand
-        let exe_name = s.node_exe.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        if let Some(pid) = win::find_processes(&exe_name).first() {
+        if let Some(e) = self.conflict() {
             self.want_running = false;
-            return Err(trf(lang, "err.already_running", &[("exe", exe_name.clone()), ("pid", pid.to_string())]));
-        }
-        if let Ok(addr) = s.rpc_endpoint.parse::<std::net::SocketAddr>() {
-            if std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok() {
-                self.want_running = false;
-                return Err(trf(lang, "err.port_busy", &[("endpoint", s.rpc_endpoint.clone())]));
-            }
+            return Err(e);
         }
         std::fs::create_dir_all(&s.data_dir).map_err(|e| {
             trf(lang, "err.mkdir", &[("path", s.data_dir.display().to_string()), ("e", e.to_string())])

@@ -301,6 +301,11 @@ fn main() {
             let settings = Settings::load(&settings_path);
             let start_now = settings.start_node_with_app;
             let sup = Supervisor::start_new(settings);
+            // Before anything opens: with a node or program already in the way, there is nothing to show
+            if let Some(e) = sup.conflict() {
+                node_gui::win::error_box("Graphene Node", &e);
+                std::process::exit(1);
+            }
             if start_now && !sup.is_node_running() {
                 if let Err(e) = sup.start() {
                     error_dialog(app.handle(), e);
