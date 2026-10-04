@@ -131,6 +131,43 @@ function renderStatus(s) {
   $("datadir").textContent = s.data_dir;
   $("proc").textContent = running ? t(s.attached ? "proc.attached" : "proc.running", { pid: s.pid }) : t("proc.not_running");
   $("lastexit").textContent = s.last_exit || "—";
+  $("peer-count").textContent = s.peers ? fmt(s.peers.length) : (running && s.peers_note) || "—";
+  renderPeers(s);
+}
+
+// ---------- peers ----------
+function bytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1073741824) return `${(n / 1048576).toFixed(1)} MB`;
+  return `${(n / 1073741824).toFixed(2)} GB`;
+}
+
+function renderPeers(s) {
+  const running = s.pid != null;
+  const peers = s.peers || [];
+  let note;
+  if (!running) note = t("peers.not_running");
+  else if (!s.peers) note = s.peers_note || t("peers.waiting");
+  else if (!peers.length) note = t("peers.none");
+  else note = t("peers.count", { n: peers.length });
+  $("peers-status").textContent = note;
+  $("peers-status").classList.toggle("warn", running && !!s.peers && !peers.length);
+  const now = Date.now() / 1000;
+  const ago = (ts) => (ts ? human(Math.max(0, Math.round(now - ts))) : "—");
+  const body = $("peer-table").tBodies[0];
+  body.replaceChildren(...[...peers].sort((a, b) => a.connected_since - b.connected_since).map((p) => {
+    const tr = document.createElement("tr");
+    for (const v of [p.addr, t(p.inbound ? "peers.inbound" : "peers.outbound"), p.user_agent || "—",
+                     p.platform || "—", fmt(p.head_block), ago(p.connected_since), ago(p.last_received),
+                     bytes(p.bytes_received), bytes(p.bytes_sent)]) {
+      const td = document.createElement("td");
+      td.textContent = v;
+      tr.append(td);
+    }
+    return tr;
+  }));
+  $("peer-table").classList.toggle("hidden", !peers.length);
 }
 
 $("btn-start").onclick = () => invoke("node_start").catch(() => {}); // a failure opens an error box

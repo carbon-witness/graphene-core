@@ -30,6 +30,7 @@ the window (Wine has no WebView2): start, re-attach through the lock file, watch
 | --- | --- |
 | `src/supervisor.rs` | Node process, lock file, stop via event, watchdog (15 s / 1 min / 5 min, stops after 3 crashes in 10 min), status |
 | `src/logtail.rs` | Follows `logs/default/default.log`: stages (opening, replay %, started), chain ID, WIF masking |
-| `src/rpc.rs` | WebSocket client for the anonymous database API: head, irreversible block, chain ID |
+| `src/rpc.rs` | WebSocket client: head, irreversible block and chain ID (anonymous database API), connected peers (network_node API after a login) |
+| `src/api_access.rs` | Writes the node's `--api-access` file with an account for the app, unless config.ini sets api-access |
 | `src/main.rs` | Tauri: tray icon and menu, window commands, hide-to-tray, "Выход" stops the node |
 | `dist/` | The window: dashboard, journal, settings (plain HTML/JS, no build step) |

@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 fn show(sup: &Supervisor) -> node_gui::supervisor::Status {
     let s = sup.status();
     println!(
-        "{:?} {} {} pid={:?} attached={} clean_stop={} head={:?} stale={:?} | {}{}",
+        "{:?} {} {} pid={:?} attached={} clean_stop={} head={:?} stale={:?} peers={} | {}{}",
         s.phase,
         s.color,
         s.glyph,
@@ -19,6 +19,11 @@ fn show(sup: &Supervisor) -> node_gui::supervisor::Status {
         s.can_stop_cleanly,
         s.chain.as_ref().map(|c| c.head_block),
         s.api_stale_seconds,
+        match (&s.peers, &s.peers_note) {
+            (Some(p), _) => format!("{:?}", p.iter().map(|p| p.addr.as_str()).collect::<Vec<_>>()),
+            (None, Some(n)) => format!("none ({n})"),
+            (None, None) => "none".into(),
+        },
         s.summary,
         s.last_exit.as_deref().map(|e| format!(" | last: {e}")).unwrap_or_default()
     );

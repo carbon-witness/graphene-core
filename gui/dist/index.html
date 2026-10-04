@@ -19,6 +19,7 @@
 <nav class="tabs">
   <button class="tab active" data-tab="dash" data-i18n="tab.dashboard">Dashboard</button>
   <button class="tab" data-tab="journal" data-i18n="tab.journal">Journal</button>
+  <button class="tab" data-tab="peers" data-i18n="tab.peers">Peers</button>
   <button class="tab" data-tab="settings" data-i18n="tab.settings">Settings</button>
 </nav>
 
@@ -42,6 +43,7 @@
       <dt data-i18n="dash.chain_id">Chain ID</dt><dd><code id="chain">—</code></dd>
       <dt data-i18n="dash.rpc">RPC</dt><dd><code id="rpc">—</code> <button class="link" id="btn-copy" data-i18n="dash.copy">copy</button></dd>
       <dt data-i18n="dash.data_dir">Data folder</dt><dd><code id="datadir">—</code> <button class="link" id="btn-open-data" data-i18n="dash.open">open</button></dd>
+      <dt data-i18n="dash.peers">Peers</dt><dd id="peer-count">—</dd>
       <dt data-i18n="dash.process">Process</dt><dd id="proc">—</dd>
       <dt data-i18n="dash.last_event">Last event</dt><dd id="lastexit">—</dd>
     </dl>
@@ -74,6 +76,19 @@
       <tbody></tbody>
     </table>
     <button id="btn-latest" class="latest hidden"></button>
+  </section>
+
+  <section id="peers" class="page">
+    <div class="journal-status" id="peers-status">—</div>
+    <table id="peer-table" class="blocks peers">
+      <thead><tr>
+        <th data-i18n="col.address">Address</th><th data-i18n="col.direction">Direction</th>
+        <th data-i18n="col.agent">Software</th><th data-i18n="col.platform">Platform</th>
+        <th data-i18n="col.peer_head">Peer's block</th><th data-i18n="col.connected">Connected</th>
+        <th data-i18n="col.last_recv">Last message</th><th data-i18n="col.received">Received</th><th data-i18n="col.sent">Sent</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
   </section>
 
   <section id="settings" class="page">
