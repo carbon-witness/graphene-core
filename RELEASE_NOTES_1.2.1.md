@@ -167,7 +167,7 @@ A Tauri 2 app, `gui/` in this repository, version 0.1.0.
   anonymous access unchanged plus an account for the app (a random password per node start, kept in
   `graphene-node-gui.lock`), and starts the node with `--api-access`.
 - **Peer release and build.** From 1.2.1 on, the node's P2P user agent carries its build string (see below).
-  Older releases send no version; the app recognises 1.0, 1.1, the 1.1 carbon build (fc `a108c380`) and 1.2.0
+  Older releases send no version; the app recognises 1.0, 1.1, the 1.1 carbon build (fc `a108c380`), 1.2.0 and the 1.2.0 carbon build (`d5a98f9a`)
   by the commit time of the fc library they report and shows the commit of their release tag as the build
   (for the carbon build, its fc commit); other builds get a "?".
 - **No blocks from the network.** Behind and without a new block for 90 s, the status says so. With no peers it
