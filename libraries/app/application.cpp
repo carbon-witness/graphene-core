@@ -36,6 +36,7 @@
 #include <graphene/net/core_messages.hpp>
 #include <graphene/net/exceptions.hpp>
 
+#include <graphene/utilities/git_revision.hpp>
 #include <graphene/utilities/key_conversion.hpp>
 #include <graphene/chain/worker_evaluator.hpp>
 
@@ -117,7 +118,9 @@ namespace graphene { namespace app { namespace detail {
 
 void application_impl::reset_p2p_node(const fc::path& data_dir)
 { try {
-   _p2p_network = std::make_shared<net::node>("Graphene Reference Implementation");
+   // The build string ("1.2.1-286e0801") lets peers tell versions apart: the P2P hello carries no version
+   _p2p_network = std::make_shared<net::node>( std::string("Graphene Reference Implementation ")
+                                               + graphene::utilities::git_revision_description );
 
    _p2p_network->load_configuration(data_dir / "p2p");
    _p2p_network->set_node_delegate(this);

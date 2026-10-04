@@ -96,6 +96,8 @@ pub struct Peer {
     pub addr: String,
     pub inbound: bool,
     pub user_agent: String,
+    /// The release the peer runs, see peer_version
+    pub version: String,
     pub platform: String,
     /// Unix seconds
     pub connected_since: i64,
@@ -122,6 +124,7 @@ fn parse_peer(p: &Value) -> Peer {
     Peer {
         addr: s("addr"),
         inbound: info.get("inbound").and_then(Value::as_bool).unwrap_or(false),
+        version: peer_version(&s("subver"), time("fc_git_revision_unix_timestamp")),
         user_agent: s("subver"),
         platform: s("platform"),
         connected_since: time("conntime"),
@@ -129,6 +132,34 @@ fn parse_peer(p: &Value) -> Peer {
         bytes_sent: n("bytessent"),
         bytes_received: n("bytesrecv"),
         head_block: n("current_head_block_number"),
+    }
+}
+
+const GRAPHENE_AGENT: &str = "Graphene Reference Implementation";
+const BITSHARES_AGENT: &str = "BitShares Reference Implementation";
+/// Commit times of the fc library in each release build: before 1.2.1 the P2P hello carries no version, only
+/// the fc revision. 1.2.0 was tagged in two repositories, on different fc commits.
+const RELEASE_FC_TIMES: [(i64, &str); 4] = [
+    (1569050266, "1.0"),   // graphene-fc 6d8d030
+    (1789991063, "1.1"),   // graphene-fc f17ef47
+    (1790499127, "1.2.0"), // carbon-witness/graphene-fc 551377b
+    (1790609551, "1.2.0"), // graphene-blockchain/graphene-fc 0a5fcbe
+];
+
+/// The release a peer runs. From 1.2.1 on, the user agent ends with the build string ("... 1.2.1-286e0801");
+/// older releases are recognised by their fc revision time, and by the user agent: up to 1.1 the node called
+/// itself BitShares. "?" marks a guess for a build that is no release.
+pub fn peer_version(user_agent: &str, fc_time: i64) -> String {
+    if let Some(build) = user_agent.strip_prefix(GRAPHENE_AGENT).map(str::trim).filter(|b| !b.is_empty()) {
+        return build.to_string();
+    }
+    if let Some((_, v)) = RELEASE_FC_TIMES.iter().find(|(t, _)| *t == fc_time) {
+        return v.to_string();
+    }
+    match user_agent {
+        GRAPHENE_AGENT => "1.2.0?".into(),
+        BITSHARES_AGENT => "≤ 1.1?".into(),
+        _ => "?".into(),
     }
 }
 
@@ -183,6 +214,18 @@ mod tests {
         assert_eq!(p.connected_since, parse_time("2026-10-04T10:00:00").unwrap());
         assert_eq!(p.last_received, 1791108000);
         assert_eq!((p.bytes_sent, p.bytes_received, p.head_block), (1200, 3400, 55000000));
+    }
+
+    #[test]
+    fn tells_releases_apart() {
+        assert_eq!(peer_version("Graphene Reference Implementation 1.2.1-286e0801", 0), "1.2.1-286e0801");
+        assert_eq!(peer_version("Graphene Reference Implementation", 1790499127), "1.2.0");
+        assert_eq!(peer_version("Graphene Reference Implementation", 1790609551), "1.2.0");
+        assert_eq!(peer_version("BitShares Reference Implementation", 1789991063), "1.1");
+        assert_eq!(peer_version("BitShares Reference Implementation", 1569050266), "1.0");
+        assert_eq!(peer_version("BitShares Reference Implementation", 1), "≤ 1.1?");
+        assert_eq!(peer_version("Graphene Reference Implementation", 1), "1.2.0?");
+        assert_eq!(peer_version("Something else", 1), "?");
     }
 
     #[test]

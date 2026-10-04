@@ -158,7 +158,7 @@ function renderPeers(s) {
   const body = $("peer-table").tBodies[0];
   body.replaceChildren(...[...peers].sort((a, b) => a.connected_since - b.connected_since).map((p) => {
     const tr = document.createElement("tr");
-    for (const v of [p.addr, t(p.inbound ? "peers.inbound" : "peers.outbound"), p.user_agent || "—",
+    for (const v of [p.addr, t(p.inbound ? "peers.inbound" : "peers.outbound"), p.version || "?", p.user_agent || "—",
                      p.platform || "—", fmt(p.head_block), ago(p.connected_since), ago(p.last_received),
                      bytes(p.bytes_received), bytes(p.bytes_sent)]) {
       const td = document.createElement("td");

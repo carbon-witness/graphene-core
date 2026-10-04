@@ -20,7 +20,7 @@ fn show(sup: &Supervisor) -> node_gui::supervisor::Status {
         s.chain.as_ref().map(|c| c.head_block),
         s.api_stale_seconds,
         match (&s.peers, &s.peers_note) {
-            (Some(p), _) => format!("{:?}", p.iter().map(|p| p.addr.as_str()).collect::<Vec<_>>()),
+            (Some(p), _) => format!("{:?}", p.iter().map(|p| format!("{} {}", p.addr, p.version)).collect::<Vec<_>>()),
             (None, Some(n)) => format!("none ({n})"),
             (None, None) => "none".into(),
         },
