@@ -49,6 +49,7 @@ async function setLanguage(lang) {
   if (status) renderStatus(status);
   renderJournalStatus();
   renderJournal(true);
+  showVersions();
 }
 
 const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString(dict._number_locale || "en-US"));
@@ -378,6 +379,12 @@ async function loadSettings() {
   $("rpc-warning").classList.toggle("hidden", rpcIsLocal(s.rpc_endpoint));
   return s;
 }
+
+// "Graphene Node 1.0.0 · witness_node 1.2.1-d80c6afe", also in the files' properties
+async function showVersions() {
+  const [gui, node] = await invoke("get_versions").catch(() => [null, null]);
+  if (gui) $("versions").textContent = t("about.versions", { gui, node: node || "—" });
+}
 form.rpc_endpoint.addEventListener("input", () => $("rpc-warning").classList.toggle("hidden", rpcIsLocal(form.rpc_endpoint.value)));
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -393,6 +400,7 @@ form.addEventListener("submit", async (e) => {
   // The startup entry lives in the Windows registry, not in the settings file
   if (form.autostart.checked !== (await call("get_autostart"))) await call("set_autostart", { enabled: form.autostart.checked });
   if (settings.language !== before.language) await setLanguage(settings.language);
+  showVersions(); // the node may be another executable now
   $("saved").textContent = t("settings.saved");
   setTimeout(() => ($("saved").textContent = ""), 3000);
   const nodeOptionsChanged = ["node_exe", "data_dir", "rpc_endpoint"].some((k) => settings[k] !== before[k]);

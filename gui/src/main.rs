@@ -67,6 +67,23 @@ fn error_dialog(app: &AppHandle, message: String) {
         .show(|_| {});
 }
 
+/// The app's version and the build of the node it runs, for the settings page. The node's answer is cached
+/// per executable and modification time: --version starts the whole program.
+#[tauri::command]
+fn get_versions(st: State<AppState>) -> (String, Option<String>) {
+    static CACHE: std::sync::Mutex<Option<(PathBuf, Option<std::time::SystemTime>, Option<String>)>> =
+        std::sync::Mutex::new(None);
+    let exe = st.sup.settings().node_exe;
+    let modified = std::fs::metadata(&exe).and_then(|m| m.modified()).ok();
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    let fresh = matches!(&*cache, Some((p, m, _)) if *p == exe && *m == modified);
+    if !fresh {
+        *cache = Some((exe.clone(), modified, node_gui::win::node_build(&exe)));
+    }
+    let node = cache.as_ref().and_then(|(_, _, b)| b.clone());
+    (env!("CARGO_PKG_VERSION").to_string(), node)
+}
+
 #[tauri::command]
 fn add_seed(st: State<AppState>, addr: String) -> Result<(), String> {
     st.sup.add_seed(&addr)
@@ -391,6 +408,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_status,
+            get_versions,
             add_seed,
             remove_seed,
             get_log,

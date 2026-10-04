@@ -160,5 +160,6 @@
   "seeds.invalid": "«{addr}» — не хост:порт",
   "seeds.exists": "{addr} уже есть в списке",
   "seeds.state.handshaking": "идёт рукопожатие…",
-  "dash.eta_left": "осталось ≈ {t}"
+  "dash.eta_left": "осталось ≈ {t}",
+  "about.versions": "Graphene Node {gui} · witness_node {node}"
 }
