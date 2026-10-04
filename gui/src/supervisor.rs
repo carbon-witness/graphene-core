@@ -404,6 +404,8 @@ impl Supervisor {
                     Some(r) => rpc::chain_info(r, first_block_time),
                     None => Err(tr(&lang, "rpc.unavailable")),
                 };
+                // When the API answered: the peer calls below take time too and must not age the chain figures
+                let answered = Instant::now();
                 // The peer list, on the same connection; a failure here leaves the chain figures alone
                 let peers = match (&result, rpc.as_mut()) {
                     (Ok(_), Some(r)) if logged_in => Some(rpc::peers(r)),
@@ -418,7 +420,8 @@ impl Supervisor {
                             rpc::add_node(r, &ep).ok();
                         }
                     }
-                    if round % 5 == 1 {
+                    // The whole list of endpoints the node knows, for the seeds table: large, so every 30 s
+                    if round % 15 == 1 {
                         potential = rpc::potential_peers(r).ok();
                     }
                 }
@@ -430,7 +433,7 @@ impl Supervisor {
                             i.head_seen = Some((c.head_block, Instant::now()));
                         }
                         i.chain = Some(c);
-                        i.chain_updated = Some(Instant::now());
+                        i.chain_updated = Some(answered);
                         i.rpc_error = None;
                         if potential.is_some() {
                             i.potential = potential;
