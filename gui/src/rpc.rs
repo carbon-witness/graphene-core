@@ -164,15 +164,35 @@ pub fn potential_peers(rpc: &mut Rpc) -> Result<Vec<PotentialPeer>, String> {
         disposition: p.get("last_connection_disposition").and_then(Value::as_str).unwrap_or_default().to_string(),
         last_attempt: p.get("last_connection_attempt_time").and_then(Value::as_str).and_then(parse_time).unwrap_or(0),
         failures: p.get("number_of_failed_connection_attempts").and_then(Value::as_u64).unwrap_or(0) as u32,
-        // An fc::exception: its message, e.g. "Connection refused" or "Operation timed out"
-        error: p
-            .get("last_error")
-            .and_then(|e| e.get("message").or_else(|| e.get("name")))
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string(),
+        error: p.get("last_error").map(exception_text).unwrap_or_default(),
     };
     Ok(list.as_array().map(|a| a.iter().map(one).collect()).unwrap_or_default())
+}
+
+/// The text of an fc::exception as JSON. Its "message" is often just the generic "unspecified"; the reason
+/// (e.g. "Connection reset by peer", "disconnecting because we never received a hello") is in the format strings
+/// of its log stack, with ${name} placeholders filled from their data.
+pub fn exception_text(e: &Value) -> String {
+    let fill = |entry: &Value| -> Option<String> {
+        let mut text = entry.get("format")?.as_str()?.to_string();
+        if let Some(data) = entry.get("data").and_then(Value::as_object) {
+            for (k, v) in data {
+                let v = v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string());
+                text = text.replace(&format!("${{{k}}}"), &v);
+            }
+        }
+        let text = text.trim().to_string();
+        (!text.is_empty()).then_some(text)
+    };
+    let stack: Vec<String> = e
+        .get("stack")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(fill).collect())
+        .unwrap_or_default();
+    if !stack.is_empty() {
+        return stack.join("; ");
+    }
+    e.get("message").or_else(|| e.get("name")).and_then(Value::as_str).unwrap_or_default().to_string()
 }
 
 /// Asks the running node to try an endpoint ("1.2.3.4:1776"); it joins the node's list of potential peers.
@@ -280,6 +300,15 @@ mod tests {
         assert_eq!(v("BitShares Reference Implementation", 1), "≤ 1.1? ?");
         assert_eq!(v("Graphene Reference Implementation", 1), "1.2.0? ?");
         assert_eq!(v("Something else", 1), "? ?");
+    }
+
+    #[test]
+    fn reads_exception_reasons() {
+        let e = json!({"code": 0, "name": "exception", "message": "unspecified", "stack": [
+            {"context": {"level": "info"}, "format": "disconnecting because ${r}", "data": {"r": "we never received a hello"}},
+            {"context": {}, "format": "", "data": {}}]});
+        assert_eq!(exception_text(&e), "disconnecting because we never received a hello");
+        assert_eq!(exception_text(&json!({"message": "unspecified", "stack": []})), "unspecified");
     }
 
     #[test]

@@ -75,7 +75,10 @@ table.blocks { display: block; border-collapse: collapse; width: 100%; font-vari
 table.peers { display: table; flex: none; min-height: 0; }
 #peers h3 { margin: 4px 0 8px; font-size: 15px; } #peers h3 + * { margin-top: 0; }
 #peers table.peers { margin-bottom: 20px; }
-#seed-addr { min-width: 220px; }
+/* The add-seed form is a toolbar row, not a settings column */
+form#seed-form { flex-direction: row; max-width: none; gap: 8px; margin-bottom: 8px; }
+#seed-addr { min-width: 260px; }
+#seed-table td:nth-child(7) { white-space: normal; min-width: 240px; }
 .seed-connected { color: var(--green); font-weight: 600; }
 .seed-failed, .seed-rejected, .seed-handshake_failed, .seed-unresolved { color: var(--red); }
 .seed-unused, .seed-never, .seed-unknown { color: var(--muted); }
