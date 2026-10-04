@@ -157,5 +157,19 @@
   "seeds.remove": "remove",
   "seeds.remove_confirm": "Remove seed {addr} from config.ini? The node forgets it at its next start.",
   "seeds.invalid": "\"{addr}\" is not host:port",
-  "seeds.exists": "{addr} is already in the list"
+  "seeds.exists": "{addr} is already in the list",
+  "col.stage": "Stopped at",
+  "col.bytes": "Sent / received",
+  "seeds.err.inactivity": "no reply for {s} s",
+  "seeds.stage.disconnected": "disconnected",
+  "seeds.stage.connecting": "TCP connect",
+  "seeds.stage.connected": "TCP connected",
+  "seeds.stage.accepting": "incoming",
+  "seeds.stage.accepted": "incoming, accepted",
+  "seeds.stage.hello_sent": "hello sent",
+  "seeds.stage.peer_connection_accepted": "accepted, waiting for addresses",
+  "seeds.stage.peer_connection_rejected": "rejected by the seed",
+  "seeds.stage.negotiation_complete": "handshake done",
+  "seeds.stage.closing": "closing",
+  "seeds.stage.closed": "closed"
 }

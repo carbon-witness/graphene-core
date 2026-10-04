@@ -177,14 +177,20 @@ function renderSeeds(s) {
   const body = $("seed-table").tBodies[0];
   body.replaceChildren(...(s.seeds || []).map((seed) => {
     const tr = document.createElement("tr");
+    // A stalled handshake is one long sentence from the node; its parts go to their own columns
+    const st = seed.stalled;
+    const stage = st ? t(`seeds.stage.${st.stage}`) : "—";
+    const bytes = st ? `${fmt(st.sent)} / ${fmt(st.received)} B` : "—";
+    const error = st ? t("seeds.err.inactivity", { s: st.timeout }) : seed.error || "";
     const cells = [seed.addr, seed.ips.join(", ") || "—", t(`seeds.source.${seed.source}`),
                    t(`seeds.state.${seed.state}`),
                    seed.last_attempt ? human(Math.max(0, Math.round(now - seed.last_attempt))) : "—",
-                   seed.failures ? fmt(seed.failures) : "—", seed.error || ""];
+                   seed.failures ? fmt(seed.failures) : "—", stage, bytes, error];
     cells.forEach((v, i) => {
       const td = document.createElement("td");
       td.textContent = v;
       if (i === 3) td.className = `seed-${seed.state}`;
+      if (i === 8) { td.className = "err"; td.title = seed.error; } // one line; the node's full text on hover
       tr.append(td);
     });
     const td = document.createElement("td");
