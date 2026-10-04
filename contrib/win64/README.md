@@ -28,3 +28,8 @@ Wine runs the build's own helpers (`cat-parts`, `embed_genesis`) through `wine-r
 Windows only: `--shutdown-event <name>` (a named event the GUI creates and signals) and
 `--parent-pid <pid>` (the node exits when that process does). Both take the same clean exit path as
 Ctrl+C, so the database is not left dirty.
+
+## CI
+
+`.github/workflows/windows.yml` runs these steps on every push and pull request, builds the GUI, and keeps
+`graphene-node-win64-<version>.zip` as an artifact; on a `graphene-X.Y.Z` tag it attaches the zip to the release.
