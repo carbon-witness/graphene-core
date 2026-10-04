@@ -388,6 +388,29 @@ websocketpp, editline and secp256k1-zkp are unchanged since 1.2.0.
 - [`d9f066a8`](https://github.com/carbon-witness/graphene-core/commit/d9f066a856e4d20584944c7c500bebd017a967c0) witness_node: ask Windows to end the node last at shutdown
 - [`0549560a`](https://github.com/carbon-witness/graphene-core/commit/0549560aea9a8ba9014d6e9a6f97bd5e4eaf5902) gui: stop the node on WM_QUERYENDSESSION; log the session end
 - [`40801f47`](https://github.com/carbon-witness/graphene-core/commit/40801f4760e571d10be01a0bc36e7a3d9a0b154a) gui: update the tray tooltip and menu only when they change
+- [`a0f241dc`](https://github.com/carbon-witness/graphene-core/commit/a0f241dcc10a653fb5444a6b1b5a3071f996137c) docs: release notes for 1.2.1
+- [`141fbe84`](https://github.com/carbon-witness/graphene-core/commit/141fbe84daa87ae7fd1d13f1b2ed009509da206e) version: 1.2.1
+- [`beb85c68`](https://github.com/carbon-witness/graphene-core/commit/beb85c680f78172f251debdce67e22442e52f508) ci: cross-build the Windows package
+- [`31cce138`](https://github.com/carbon-witness/graphene-core/commit/31cce138fcc2de01c712fc915f0e02b8c93303a7) ci: save the Windows build caches even when a later step fails
+- [`d38074a3`](https://github.com/carbon-witness/graphene-core/commit/d38074a3458df0831d07745e61c9a964c6ffa19d) gui: Peers tab; 0 % for a fresh node; say when no blocks arrive
+- [`286e080c`](https://github.com/carbon-witness/graphene-core/commit/286e080cd639b729e718c0abffd97c3517b4637b) gui: the peers table is as tall as its rows
+- [`d80c6afe`](https://github.com/carbon-witness/graphene-core/commit/d80c6afedf91270e126cba002ee43cb122243db5) Show each peer's release: build string in the user agent, Version column
+- [`9827b115`](https://github.com/carbon-witness/graphene-core/commit/9827b1154466a1eaaf4d0d681ce830dbd4004eba) gui: Seeds and Peers tab; seeds added to config.ini; Build column
+- [`d6149ef9`](https://github.com/carbon-witness/graphene-core/commit/d6149ef9ba34b11f4f7e4f0ebc8af235b3c576a6) gui: show why a seed failed, not just "unspecified"; seed form in one row
+- [`8f5f6a6d`](https://github.com/carbon-witness/graphene-core/commit/8f5f6a6d9320416f997f2b7efdea4f338945a5f8) gui: the seeds table's header no longer floats over the peers table
+- [`ff7fea71`](https://github.com/carbon-witness/graphene-core/commit/ff7fea710850a536adbee60e266b4dfbf018be4d) gui: split a stalled handshake into columns in the seeds table
+- [`3f96c8d3`](https://github.com/carbon-witness/graphene-core/commit/3f96c8d3e4f4c2bd97aaceb51c9aa10ece38a53b) gui: a seed in the middle of its handshake is not a failed one
+- [`8df4f189`](https://github.com/carbon-witness/graphene-core/commit/8df4f189bd99298935193f78979db8002ad8755d) gui: seeds table ends at Last attempt for now
+- [`1dbd49c7`](https://github.com/carbon-witness/graphene-core/commit/1dbd49c74846a9644f6d1df08b62083dbac851c5) gui: recognise the 1.1 carbon build (fc a108c380)
+- [`435e8c5f`](https://github.com/carbon-witness/graphene-core/commit/435e8c5f35aa6ea8cd22c59c88dae5f070f73edb) docs: the 1.1 carbon build in the 1.2.1 notes
+- [`47885942`](https://github.com/carbon-witness/graphene-core/commit/478859422927255115d2da8170e4660e52753d1d) gui: fewer false "API has not answered" alerts
+- [`169eed6e`](https://github.com/carbon-witness/graphene-core/commit/169eed6ee42bc39deb9cb7407a56044cc884df66) gui: show d5a98f9a as the 1.2.0 carbon build
+- [`116d9710`](https://github.com/carbon-witness/graphene-core/commit/116d9710c4a13cafa519047b3a82ef67b3578d8c) gui: days in full; estimated time to sync
+- [`4d74cee4`](https://github.com/carbon-witness/graphene-core/commit/4d74cee48a29a5d1a5cb81013fae1437f583cb26) gui: the "API has not answered" alert only on the Seeds and Peers tab
+- [`79abf5cb`](https://github.com/carbon-witness/graphene-core/commit/79abf5cb5969ad4a479f6fd645ad94534a300b05) Windows version resources: witness_node 1.2.1, Graphene Node 1.0.0
+- [`3e1e4f3e`](https://github.com/carbon-witness/graphene-core/commit/3e1e4f3eb3a3dccb3f44f153f9fdb105f0b3d98f) witness_node: Graphene contributors in the version resource's copyright
+- [`480f4ca9`](https://github.com/carbon-witness/graphene-core/commit/480f4ca95ed6f017ae58eb181eb49b795187ed86) LICENSE: add the Graphene contributors; ship LICENSE.txt in the Windows zip
+- [`b7759766`](https://github.com/carbon-witness/graphene-core/commit/b7759766935a7dc05fb3fa80a8812caa1e97b91e) docs: wording of the Windows zip contents
 
 **graphene-fc**
 - [`ac00004`](https://github.com/carbon-witness/graphene-fc/commit/ac00004908f44669c89b578b56d4af808f7caff0) Build with MinGW-w64 for 64-bit Windows
