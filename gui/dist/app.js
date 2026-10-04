@@ -84,10 +84,12 @@ async function call(cmd, args) {
 }
 
 // ---------- tabs ----------
+const activeTab = () => document.querySelector(".tab.active")?.dataset.tab;
 document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
   document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === b));
   document.querySelectorAll(".page").forEach((p) => p.classList.toggle("active", p.id === b.dataset.tab));
   if (b.dataset.tab === "journal") renderJournal(true);
+  if (status) renderStatus(status); // alerts that belong to one tab
 }));
 
 // ---------- dashboard ----------
@@ -127,7 +129,9 @@ function renderStatus(s) {
   else if (s.phase === "failed") msg = t("alert.failed", { what: s.last_exit || "" });
   else if (s.phase === "stop_timed_out") msg = t("alert.stop_timeout");
   else if (running && !s.can_stop_cleanly) msg = t("alert.no_event");
-  else if (running && s.api_stale_seconds != null) msg = t("alert.api_stale", { s: s.api_stale_seconds });
+  // A slow answer is common while the node syncs; it is only worth saying where the peer figures are
+  else if (running && s.api_stale_seconds != null && activeTab() === "peers")
+    msg = t("alert.api_stale", { s: s.api_stale_seconds });
   if (msg) { alert.textContent = msg; alert.className = "alert error"; }
   else if (Date.now() > Number(alert.dataset.until || 0)) alert.className = "alert hidden";
 
