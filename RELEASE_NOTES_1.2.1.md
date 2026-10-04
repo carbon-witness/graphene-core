@@ -152,6 +152,13 @@ A Tauri 2 app, `gui/` in this repository, version 0.1.0.
   from the node's anonymous `database` API over WebSocket and from its log.
 - **Journal:** the node's log, coloured by level as in a Linux console, with a filter by level and a "Blocks" view.
   The journal and the blocks table keep the newest 5000 rows.
+- **Peers:** the connected P2P peers with address, direction, software, platform, the peer's block, connection time
+  and traffic. The list comes from the node's `network_node` API, which anonymous clients cannot use: unless
+  `config.ini` sets `api-access`, the app writes `graphene-node-gui-api.json` into the data folder with the node's
+  default anonymous access unchanged plus an account for the app (a random password per node start, kept in
+  `graphene-node-gui.lock`), and starts the node with `--api-access`.
+- **No blocks from the network.** Behind and without a new block for 90 s, the status says so. With no peers it
+  points at unreachable seed nodes and a firewall; with peers it shows how many are connected.
 - **Actions:** start, stop and restart, as buttons of one width with player glyphs. While stopping, the status shows
   the node's current shutdown step.
 - **Settings:**
@@ -197,6 +204,10 @@ Each step is written to `%APPDATA%\org.graphene.node-gui\gui.log`.
 
 Verified on Windows 10 with two restarts: the node stopped in 2.4 s and 1.1 s, with `Shutdown: done` in its log.
 After each boot it replayed only 6–7 reversible blocks (0.003 s), without a full replay.
+
+### Sync progress of a fresh node
+A node without block 1 showed about 90 % synced: the progress was measured from Unix time 0 instead of the first
+block. It now shows 0 % until the first block arrives.
 
 ### Files
 - **Settings:** `%APPDATA%\org.graphene.node-gui\settings.json`; the session-end log `gui.log` sits next to it.
