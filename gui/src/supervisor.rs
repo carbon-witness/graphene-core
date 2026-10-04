@@ -6,7 +6,8 @@
 
 use crate::i18n::{self, tr, trf};
 use crate::logtail::{LogStage, LogTail};
-use crate::rpc::{self, ChainInfo, Rpc};
+use crate::api_access;
+use crate::rpc::{self, ChainInfo, Peer, Rpc};
 use crate::settings::Settings;
 use crate::win::{self, Event, Process};
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,8 @@ const CRASH_WINDOW: Duration = Duration::from_secs(600);
 const MAX_CRASHES: usize = 3;
 /// Head this close to the wall clock counts as synced
 const SYNCED_LAG_SECS: i64 = 60;
+/// Behind and no new block for this long: the node most likely has no peers
+const NO_BLOCKS_SECS: u64 = 90;
 const LOCK_FILE: &str = "graphene-node-gui.lock";
 /// The node's last shutdown step before its process ends (witness_node main.cpp)
 const SHUTDOWN_DONE: &str = "done, exiting the process";
@@ -50,6 +53,9 @@ struct LockFile {
     pid: u32,
     event: String,
     rpc_endpoint: String,
+    /// The app's API password (api_access.rs); missing in lock files of older versions
+    #[serde(default)]
+    rpc_password: Option<String>,
 }
 
 /// The last thing that happened to the node, kept untranslated so a language switch applies to it too
@@ -98,6 +104,13 @@ struct Inner {
     /// When the API last answered; during sync it can lag behind for many seconds
     chain_updated: Option<Instant>,
     first_block_time: Option<i64>,
+    /// The head block the API last reported, and when it last changed
+    head_seen: Option<(u64, Instant)>,
+    /// The app's API password for the running node; None when it has no account for the app
+    rpc_password: Option<String>,
+    peers: Option<Vec<Peer>>,
+    /// Why there is no peer list: an i18n key, or an error text from the node
+    peers_note: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -119,6 +132,11 @@ pub struct Status {
     pub lag_seconds: Option<i64>,
     pub sync_percent: Option<f64>,
     pub synced: bool,
+    /// Connected P2P peers; None when the list is not available (see peers_note)
+    pub peers: Option<Vec<Peer>>,
+    pub peers_note: Option<String>,
+    /// Seconds without a new block while behind, once that is over NO_BLOCKS_SECS: no peers, most likely
+    pub no_blocks_seconds: Option<u64>,
     /// The API answers with another chain ID than the one our node logged: the port is someone else's
     pub chain_id_mismatch: bool,
     pub restart_in_seconds: Option<u64>,
@@ -166,6 +184,10 @@ impl Supervisor {
                 rpc_error: None,
                 chain_updated: None,
                 first_block_time: None,
+                head_seen: None,
+                rpc_password: None,
+                peers: None,
+                peers_note: None,
             }),
         });
         sup.lock().attach_existing();
@@ -271,8 +293,10 @@ impl Supervisor {
     /// Reads the log and asks the API about the chain, without holding the lock during network calls.
     fn poll_loop(&self) {
         let mut rpc: Option<Rpc> = None;
+        // Whether this connection is logged in as the app's API user
+        let mut logged_in = false;
         loop {
-            let (endpoint, ask_rpc, first_block_time, lang) = {
+            let (endpoint, ask_rpc, first_block_time, lang, password) = {
                 let mut i = self.lock();
                 i.log.poll();
                 // Also while starting: without a file log (no logging.ini) the API is the only sign of readiness.
@@ -283,27 +307,63 @@ impl Supervisor {
                 if !up {
                     i.chain = None;
                     i.chain_updated = None;
+                    i.head_seen = None;
+                    i.peers = None;
                     i.rpc_error = None;
                 }
-                (i.settings.rpc_endpoint.clone(), up, i.first_block_time, i.settings.language.clone())
+                (i.settings.rpc_endpoint.clone(), up, i.first_block_time, i.settings.language.clone(), i.rpc_password.clone())
             };
             if !ask_rpc {
                 rpc = None;
             } else {
                 if rpc.is_none() {
                     rpc = Rpc::connect(&endpoint).ok();
+                    logged_in = false;
+                }
+                let mut login_failed = false;
+                if let (Some(r), Some(pw), false) = (rpc.as_mut(), password.as_deref(), logged_in) {
+                    match r.login(api_access::USER, pw) {
+                        Ok(ok) => {
+                            logged_in = ok;
+                            login_failed = !ok;
+                        }
+                        Err(_) => rpc = None,
+                    }
                 }
                 let result = match rpc.as_mut() {
                     Some(r) => rpc::chain_info(r, first_block_time),
                     None => Err(tr(&lang, "rpc.unavailable")),
                 };
+                // The peer list, on the same connection; a failure here leaves the chain figures alone
+                let peers = match (&result, rpc.as_mut()) {
+                    (Ok(_), Some(r)) if logged_in => Some(rpc::peers(r)),
+                    _ => None,
+                };
                 let mut i = self.lock();
                 match result {
                     Ok(c) => {
-                        i.first_block_time = Some(c.first_block_time);
+                        i.first_block_time = c.first_block_time;
+                        if i.head_seen.map(|(h, _)| h) != Some(c.head_block) {
+                            i.head_seen = Some((c.head_block, Instant::now()));
+                        }
                         i.chain = Some(c);
                         i.chain_updated = Some(Instant::now());
                         i.rpc_error = None;
+                        match peers {
+                            Some(Ok(list)) => {
+                                i.peers = Some(list);
+                                i.peers_note = None;
+                            }
+                            Some(Err(e)) => {
+                                i.peers = None;
+                                i.peers_note = Some(e);
+                            }
+                            None if login_failed => {
+                                i.peers = None;
+                                i.peers_note = Some("peers.login_failed".into());
+                            }
+                            None => {}
+                        }
                     }
                     Err(e) => {
                         rpc = None;
@@ -343,6 +403,8 @@ impl Inner {
         match ours {
             Some(process) => {
                 self.node = Some(Node { process, event: Event::open(&lock.event) });
+                self.peers_note = lock.rpc_password.is_none().then(|| "peers.restart_needed".to_string());
+                self.rpc_password = lock.rpc_password;
                 self.want_running = true;
                 self.attached = true;
                 self.set_phase(Phase::Running);
@@ -394,7 +456,7 @@ impl Inner {
         let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
         let event_name = format!("Local\\graphene-node-{}-{}-{}", std::process::id(), now_unix(), nanos);
         let event = Event::create(&event_name)?;
-        let args = vec![
+        let mut args = vec![
             "--data-dir".into(),
             s.data_dir.display().to_string(),
             "--rpc-endpoint".into(),
@@ -402,8 +464,29 @@ impl Inner {
             "--shutdown-event".into(),
             event_name.clone(),
         ];
+        // An API account for the peer list, unless config.ini manages API access itself
+        self.peers = None;
+        self.rpc_password = None;
+        if api_access::config_sets_api_access(&s.data_dir) {
+            self.peers_note = Some("peers.config_owns".into());
+        } else {
+            match api_access::write(&s.data_dir) {
+                Ok((path, password)) => {
+                    args.push("--api-access".into());
+                    args.push(path.display().to_string());
+                    self.rpc_password = Some(password);
+                    self.peers_note = None;
+                }
+                Err(e) => self.peers_note = Some(e),
+            }
+        }
         let pid = win::spawn(&s.node_exe, &args)?;
-        let lock = LockFile { pid, event: event_name, rpc_endpoint: s.rpc_endpoint.clone() };
+        let lock = LockFile {
+            pid,
+            event: event_name,
+            rpc_endpoint: s.rpc_endpoint.clone(),
+            rpc_password: self.rpc_password.clone(),
+        };
         std::fs::write(self.lock_path(), serde_json::to_string(&lock).unwrap_or_default()).ok();
         self.log.reset_stage();
         self.attached = false;
@@ -515,6 +598,10 @@ impl Inner {
         let lag = self.chain.as_ref().map(|c| now - c.head_time);
         let synced = lag.is_some_and(|l| l <= SYNCED_LAG_SECS);
         let sync_percent = self.chain.as_ref().map(|c| rpc::sync_percent(c.first_block_time, c.head_time, now));
+        let no_blocks = self
+            .head_seen
+            .map(|(_, t)| t.elapsed().as_secs())
+            .filter(|s| *s >= NO_BLOCKS_SECS && !synced && self.phase == Phase::Running);
         let mismatch = match (&self.chain, &self.log.stage.chain_id) {
             (Some(c), Some(id)) => !c.chain_id.is_empty() && &c.chain_id != id,
             _ => false,
@@ -533,6 +620,16 @@ impl Inner {
             Phase::Running => match (&self.chain, synced) {
                 _ if mismatch => trf(lang, "status.mismatch", &[("endpoint", self.settings.rpc_endpoint.clone())]),
                 (Some(c), true) => trf(lang, "status.synced", &[block(c.head_block)]),
+                (Some(c), false) if no_blocks.is_some() => {
+                    let time = ("time", i18n::duration(lang, no_blocks.unwrap_or(0) as i64));
+                    match self.peers.as_ref().map(Vec::len) {
+                        // Connected, but nobody sends blocks: the seeds are reachable, the cause is elsewhere
+                        Some(n) if n > 0 => {
+                            trf(lang, "status.no_blocks_peers", &[block(c.head_block), time, ("n", n.to_string())])
+                        }
+                        _ => trf(lang, "status.no_blocks", &[block(c.head_block), time]),
+                    }
+                }
                 (Some(c), false) => trf(
                     lang,
                     "status.syncing",
@@ -588,6 +685,10 @@ impl Inner {
             lag_seconds: lag,
             sync_percent,
             synced,
+            no_blocks_seconds: no_blocks,
+            peers: self.peers.clone(),
+            // An i18n key is translated; an error text from the node is shown as it is
+            peers_note: self.peers_note.as_ref().map(|n| if n.starts_with("peers.") { tr(lang, n) } else { n.clone() }),
             chain_id_mismatch: mismatch,
             restart_in_seconds: restart_in,
             last_exit: self.last_exit.as_ref().map(|e| e.render(lang)),
