@@ -232,8 +232,9 @@ const BITSHARES_AGENT: &str = "BitShares Reference Implementation";
 /// Release builds before 1.2.1, by the commit time of the fc library they report (the P2P hello carries no
 /// version): release, graphene-core commit of its tag. 1.2.0 was tagged in two repositories, on different
 /// fc commits.
-const RELEASE_FC_TIMES: [(i64, &str, &str); 4] = [
+const RELEASE_FC_TIMES: [(i64, &str, &str); 5] = [
     (1569050266, "1.0", "23df6159"),   // graphene-fc 6d8d030
+    (1789458113, "1.1 carbon-build", "a108c380"), // carbon-witness/graphene-fc a108c38, the build is the fc commit
     (1789991063, "1.1", "fd7c7dff"),   // graphene-fc f17ef47
     (1790499127, "1.2.0", "d5a98f9a"), // carbon-witness/graphene-fc 551377b
     (1790609551, "1.2.0", "9a37e5a9"), // graphene-blockchain/graphene-fc 0a5fcbe
@@ -324,6 +325,7 @@ mod tests {
         assert_eq!(v("Graphene Reference Implementation", 1790609551), "1.2.0 9a37e5a9");
         assert_eq!(v("BitShares Reference Implementation", 1789991063), "1.1 fd7c7dff");
         assert_eq!(v("BitShares Reference Implementation", 1569050266), "1.0 23df6159");
+        assert_eq!(v("BitShares Reference Implementation", 1789458113), "1.1 carbon-build a108c380");
         assert_eq!(v("BitShares Reference Implementation", 1), "≤ 1.1? ?");
         assert_eq!(v("Graphene Reference Implementation", 1), "1.2.0? ?");
         assert_eq!(v("Something else", 1), "? ?");
