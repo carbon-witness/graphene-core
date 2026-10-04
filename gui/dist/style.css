@@ -73,6 +73,8 @@ table.blocks { display: block; border-collapse: collapse; width: 100%; font-vari
 .blocks td.slow { color: var(--yellow); font-weight: 600; }
 /* The peers table sizes to its rows; the page scrolls */
 table.peers { display: table; flex: none; min-height: 0; }
+/* The page scrolls here, not the table: a sticky header would float over the next table */
+table.peers th { position: static; }
 #peers h3 { margin: 4px 0 8px; font-size: 15px; } #peers h3 + * { margin-top: 0; }
 #peers table.peers { margin-bottom: 20px; }
 /* The add-seed form is a toolbar row, not a settings column */
