@@ -124,6 +124,8 @@ jobs:
           cp build-win64/programs/witness_node/witness_node.exe "$name/"
           cp gui/target/x86_64-pc-windows-gnu/release/graphene-node-gui.exe "$name/"
           cp gui/target/x86_64-pc-windows-gnu/release/WebView2Loader.dll "$name/"
+          # MIT: the copyright and permission notice go with every copy
+          cp LICENSE.txt "$name/"
           zip -q -r "$name.zip" "$name"
           ls -l "$name"
           echo "name=$name" >> "$GITHUB_OUTPUT"
