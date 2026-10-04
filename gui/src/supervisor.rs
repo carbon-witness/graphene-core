@@ -7,7 +7,9 @@
 use crate::i18n::{self, tr, trf};
 use crate::logtail::{LogStage, LogTail};
 use crate::api_access;
-use crate::rpc::{self, ChainInfo, Peer, Rpc};
+use crate::rpc::{self, ChainInfo, Peer, PotentialPeer, Rpc};
+use crate::seeds;
+use std::collections::HashMap;
 use crate::settings::Settings;
 use crate::win::{self, Event, Process};
 use serde::{Deserialize, Serialize};
@@ -109,6 +111,12 @@ struct Inner {
     /// The app's API password for the running node; None when it has no account for the app
     rpc_password: Option<String>,
     peers: Option<Vec<Peer>>,
+    /// Every endpoint the node knows of, with its last connection attempt
+    potential: Option<Vec<PotentialPeer>>,
+    /// Seed "host:port" to the IPv4 endpoints it resolved to
+    resolved: HashMap<String, Vec<String>>,
+    /// Seeds added while the node runs, still to be passed to it
+    pending_seeds: Vec<String>,
     /// Why there is no peer list: an i18n key, or an error text from the node
     peers_note: Option<String>,
 }
@@ -134,6 +142,8 @@ pub struct Status {
     pub synced: bool,
     /// Connected P2P peers; None when the list is not available (see peers_note)
     pub peers: Option<Vec<Peer>>,
+    /// The built-in seeds, then the ones the user added
+    pub seeds: Vec<SeedStatus>,
     pub peers_note: Option<String>,
     /// Seconds without a new block while behind, once that is over NO_BLOCKS_SECS: no peers, most likely
     pub no_blocks_seconds: Option<u64>,
@@ -143,6 +153,20 @@ pub struct Status {
     pub last_exit: Option<String>,
     pub rpc_endpoint: String,
     pub data_dir: PathBuf,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct SeedStatus {
+    pub addr: String,
+    /// builtin, seed_node (config.ini; the app can add and remove these) or seed_nodes (config.ini list)
+    pub source: &'static str,
+    pub ips: Vec<String>,
+    /// connected, succeeded, failed, rejected, handshake_failed, never, unresolved, unused (replaced by
+    /// seed-nodes in config.ini) or unknown (no data from the node)
+    pub state: &'static str,
+    pub last_attempt: i64,
+    pub failures: u32,
+    pub error: String,
 }
 
 pub struct Supervisor {
@@ -187,6 +211,9 @@ impl Supervisor {
                 head_seen: None,
                 rpc_password: None,
                 peers: None,
+                potential: None,
+                resolved: HashMap::new(),
+                pending_seeds: Vec::new(),
                 peers_note: None,
             }),
         });
@@ -262,6 +289,31 @@ impl Supervisor {
         i.settings = s;
     }
 
+    /// Adds "seed-node = addr" to config.ini and, when the node runs, passes the seed on at once.
+    pub fn add_seed(&self, addr: &str) -> Result<(), String> {
+        let addr = addr.trim().to_string();
+        let mut i = self.lock();
+        let lang = i.settings.language.clone();
+        if !seeds::is_valid(&addr) {
+            return Err(trf(&lang, "seeds.invalid", &[("addr", addr)]));
+        }
+        let data_dir = i.settings.data_dir.clone();
+        if seeds::defaults().contains(&addr) || seeds::load_config(&data_dir).seed_node.contains(&addr) {
+            return Err(trf(&lang, "seeds.exists", &[("addr", addr)]));
+        }
+        std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+        seeds::add_to_config(&data_dir, &addr)?;
+        i.pending_seeds.push(addr);
+        Ok(())
+    }
+
+    /// Removes "seed-node = addr" from config.ini; the node forgets the seed at its next start.
+    pub fn remove_seed(&self, addr: &str) -> Result<(), String> {
+        let mut i = self.lock();
+        i.pending_seeds.retain(|s| s != addr);
+        seeds::remove_from_config(&i.settings.data_dir, addr)
+    }
+
     pub fn is_node_running(&self) -> bool {
         self.lock().node.is_some()
     }
@@ -295,7 +347,22 @@ impl Supervisor {
         let mut rpc: Option<Rpc> = None;
         // Whether this connection is logged in as the app's API user
         let mut logged_in = false;
+        let mut round: u64 = 0;
         loop {
+            round += 1;
+            // Seeds resolve to IPs, which is how the node lists them; a host name is looked up every 10 minutes
+            let wanted: Vec<String> = {
+                let i = self.lock();
+                let config = seeds::load_config(&i.settings.data_dir);
+                let mut all = seeds::defaults();
+                all.extend(config.seed_node);
+                all.extend(config.seed_nodes.unwrap_or_default());
+                all.into_iter().filter(|a| round % 300 == 1 || !i.resolved.contains_key(a)).collect()
+            };
+            if !wanted.is_empty() {
+                let found: Vec<(String, Vec<String>)> = wanted.into_iter().map(|a| { let r = seeds::resolve(&a); (a, r) }).collect();
+                self.lock().resolved.extend(found);
+            }
             let (endpoint, ask_rpc, first_block_time, lang, password) = {
                 let mut i = self.lock();
                 i.log.poll();
@@ -309,6 +376,7 @@ impl Supervisor {
                     i.chain_updated = None;
                     i.head_seen = None;
                     i.peers = None;
+                    i.potential = None;
                     i.rpc_error = None;
                 }
                 (i.settings.rpc_endpoint.clone(), up, i.first_block_time, i.settings.language.clone(), i.rpc_password.clone())
@@ -339,6 +407,19 @@ impl Supervisor {
                     (Ok(_), Some(r)) if logged_in => Some(rpc::peers(r)),
                     _ => None,
                 };
+                // Seeds added since the last round, then every 10 s the node's list of known endpoints
+                let mut potential = None;
+                if let (Ok(_), Some(r), true) = (&result, rpc.as_mut(), logged_in) {
+                    let pending: Vec<String> = std::mem::take(&mut self.lock().pending_seeds);
+                    for addr in pending {
+                        for ep in seeds::resolve(&addr) {
+                            rpc::add_node(r, &ep).ok();
+                        }
+                    }
+                    if round % 5 == 1 {
+                        potential = rpc::potential_peers(r).ok();
+                    }
+                }
                 let mut i = self.lock();
                 match result {
                     Ok(c) => {
@@ -349,6 +430,9 @@ impl Supervisor {
                         i.chain = Some(c);
                         i.chain_updated = Some(Instant::now());
                         i.rpc_error = None;
+                        if potential.is_some() {
+                            i.potential = potential;
+                        }
                         match peers {
                             Some(Ok(list)) => {
                                 i.peers = Some(list);
@@ -464,6 +548,8 @@ impl Inner {
             "--shutdown-event".into(),
             event_name.clone(),
         ];
+        // The node reads the added seeds from config.ini itself
+        self.pending_seeds.clear();
         // An API account for the peer list, unless config.ini manages API access itself
         self.peers = None;
         self.rpc_password = None;
@@ -593,6 +679,72 @@ impl Inner {
         }
     }
 
+    fn seed_status(&self) -> Vec<SeedStatus> {
+        let config = seeds::load_config(&self.settings.data_dir);
+        // seed-nodes in config.ini replaces the built-in list; seed-node entries come on top of either
+        let replaced = config.seed_nodes.is_some();
+        let builtin = seeds::defaults().into_iter().map(|a| (a, "builtin"));
+        let listed = config.seed_nodes.unwrap_or_default().into_iter().map(|a| (a, "seed_nodes"));
+        let added = config.seed_node.into_iter().map(|a| (a, "seed_node"));
+        builtin
+            .chain(listed)
+            .chain(added)
+            .map(|(addr, source)| {
+                let ips = self.resolved.get(&addr).cloned();
+                let mut st = SeedStatus {
+                    addr,
+                    source,
+                    ips: ips.clone().unwrap_or_default(),
+                    state: "unknown",
+                    last_attempt: 0,
+                    failures: 0,
+                    error: String::new(),
+                };
+                if replaced && source == "builtin" {
+                    st.state = "unused";
+                    return st;
+                }
+                let ips = match ips {
+                    Some(ips) if ips.is_empty() => {
+                        st.state = "unresolved";
+                        return st;
+                    }
+                    Some(ips) => ips,
+                    None => return st,
+                };
+                if self.peers.as_ref().is_some_and(|p| p.iter().any(|p| ips.contains(&p.addr))) {
+                    st.state = "connected";
+                }
+                // The most recent attempt over the seed's addresses
+                let record = self
+                    .potential
+                    .as_ref()
+                    .and_then(|list| list.iter().filter(|p| ips.contains(&p.addr)).max_by_key(|p| p.last_attempt));
+                if let Some(p) = record {
+                    st.last_attempt = p.last_attempt;
+                    st.failures = p.failures;
+                    // The error of an earlier attempt means nothing once a connection worked
+                    st.error = p.error.clone();
+                    if st.state != "connected" {
+                        st.state = match p.disposition.as_str() {
+                            "last_connection_succeeded" => "succeeded",
+                            "last_connection_failed" => "failed",
+                            "last_connection_rejected" => "rejected",
+                            "last_connection_handshaking_failed" => "handshake_failed",
+                            _ => "never",
+                        };
+                    }
+                } else if self.potential.is_some() && st.state != "connected" {
+                    st.state = "never";
+                }
+                if !matches!(st.state, "failed" | "rejected" | "handshake_failed") {
+                    st.error.clear();
+                }
+                st
+            })
+            .collect()
+    }
+
     fn status(&self) -> Status {
         let now = now_unix();
         let lag = self.chain.as_ref().map(|c| now - c.head_time);
@@ -687,6 +839,7 @@ impl Inner {
             synced,
             no_blocks_seconds: no_blocks,
             peers: self.peers.clone(),
+            seeds: self.seed_status(),
             // An i18n key is translated; an error text from the node is shown as it is
             peers_note: self.peers_note.as_ref().map(|n| if n.starts_with("peers.") { tr(lang, n) } else { n.clone() }),
             chain_id_mismatch: mismatch,

@@ -2,6 +2,7 @@
 //!   supervisor-cli <node.exe> <data dir> <rpc endpoint> start   start the node, print status until it runs, leave it
 //!   supervisor-cli <node.exe> <data dir> <rpc endpoint> stop    attach through the lock file and stop it cleanly
 //!   supervisor-cli <node.exe> <data dir> <rpc endpoint> watch N print status every second for N seconds
+//!   supervisor-cli <node.exe> <data dir> <rpc endpoint> add-seed ADDR N   add a seed, then print status for N s
 
 use node_gui::settings::Settings;
 use node_gui::supervisor::{Phase, Supervisor, STOP_TIMEOUT};
@@ -33,7 +34,7 @@ fn show(sup: &Supervisor) -> node_gui::supervisor::Status {
 fn main() {
     let a: Vec<String> = std::env::args().collect();
     if a.len() < 5 {
-        eprintln!("usage: supervisor-cli <node.exe> <data dir> <rpc endpoint> start|stop|watch N");
+        eprintln!("usage: supervisor-cli <node.exe> <data dir> <rpc endpoint> start|stop|watch N|add-seed ADDR N");
         std::process::exit(2);
     }
     let settings = Settings {
@@ -106,6 +107,21 @@ fn main() {
                 },
             );
             std::thread::sleep(Duration::from_secs(120));
+        }
+        "add-seed" => {
+            // add-seed ADDR N: add a seed (config.ini, and the running node at once), then watch N seconds
+            match sup.add_seed(a.get(5).map(String::as_str).unwrap_or("")) {
+                Ok(()) => println!("seed added"),
+                Err(e) => println!("add-seed failed: {e}"),
+            }
+            let n: u64 = a.get(6).and_then(|x| x.parse().ok()).unwrap_or(10);
+            for _ in 0..n {
+                let s = show(&sup);
+                for seed in s.seeds.iter().filter(|x| x.source != "builtin") {
+                    println!("  seed {} {:?} {} failures={} {}", seed.addr, seed.ips, seed.state, seed.failures, seed.error);
+                }
+                std::thread::sleep(Duration::from_secs(1));
+            }
         }
         "watch" => {
             let n: u64 = a.get(5).and_then(|x| x.parse().ok()).unwrap_or(10);
