@@ -113,6 +113,7 @@
   "dash.peers": "Пиры",
   "col.address": "Адрес",
   "col.direction": "Направление",
+  "col.version": "Версия",
   "col.agent": "Программа",
   "col.platform": "Платформа",
   "col.peer_head": "Блок пира",

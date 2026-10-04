@@ -113,6 +113,7 @@
   "dash.peers": "Peers",
   "col.address": "Address",
   "col.direction": "Direction",
+  "col.version": "Version",
   "col.agent": "Software",
   "col.platform": "Platform",
   "col.peer_head": "Peer's block",
