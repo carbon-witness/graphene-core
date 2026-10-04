@@ -160,5 +160,6 @@
   "seeds.invalid": "\"{addr}\" is not host:port",
   "seeds.exists": "{addr} is already in the list",
   "seeds.state.handshaking": "handshaking…",
-  "dash.eta_left": "≈ {t} left"
+  "dash.eta_left": "≈ {t} left",
+  "about.versions": "Graphene Node {gui} · witness_node {node}"
 }

@@ -125,6 +125,20 @@ impl Event {
     }
 }
 
+/// The build string witness_node.exe reports with --version ("1.2.1-d80c6afe"), or None if it cannot be run.
+pub fn node_build(exe: &Path) -> Option<String> {
+    let out = Command::new(exe)
+        .arg("--version")
+        .current_dir(exe.parent().unwrap_or(Path::new(".")))
+        .stdin(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let line = text.lines().find(|l| l.starts_with("Build:"))?;
+    Some(line.trim_start_matches("Build:").trim().to_string())
+}
+
 /// PIDs of running processes whose executable file name is `exe_name` (case-insensitive).
 pub fn find_processes(exe_name: &str) -> Vec<u32> {
     let mut pids = Vec::new();
