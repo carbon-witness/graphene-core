@@ -32,6 +32,7 @@ let mode = "raw";
 let follow = true;       // keep the feed scrolled to the newest line
 let unseen = 0;
 const headSamples = [];  // [time ms, head block] over the last minute, from fresh API answers only
+const chainTimeSamples = []; // [time ms, head block time s] over the last 5 minutes, for the time to sync
 
 // ---------- translations ----------
 let dict = {}, fallback = {};
@@ -56,7 +57,18 @@ function human(s) {
   if (s < 120) return t("dur.s", { n: s });
   if (s < 7200) return t("dur.min", { n: Math.floor(s / 60) });
   if (s < 172800) return t("dur.h", { n: Math.floor(s / 3600) });
-  return t("dur.d", { n: Math.floor(s / 86400) });
+  const d = Math.floor(s / 86400);
+  return t(pluralKey("dur.d", d), { n: d });
+}
+
+// Russian has three forms ("21 день", "22 дня", "25 дней"); English the same text for all (i18n.rs plural_key)
+function pluralKey(key, n) {
+  let form = n === 1 ? "one" : "many";
+  if (document.documentElement.lang === "ru") {
+    const [a, b] = [n % 10, n % 100];
+    form = a === 1 && b !== 11 ? "one" : a >= 2 && a <= 4 && !(b >= 12 && b <= 14) ? "few" : "many";
+  }
+  return `${key}_${form}`;
 }
 
 // ---------- errors ----------
@@ -86,6 +98,17 @@ function blocksPerMinute() {
   return t1 - t0 >= 5000 ? Math.round(((b1 - b0) * 60000) / (t1 - t0)) : null;
 }
 
+// Seconds until the head block time catches up with now, from how fast it advanced over the last minutes.
+// The chain's own clock moves on meanwhile, so only the speed above real time closes the gap.
+function secondsToSync(lag) {
+  if (lag == null || chainTimeSamples.length < 2) return null;
+  const [t0, c0] = chainTimeSamples[0];
+  const [t1, c1] = chainTimeSamples[chainTimeSamples.length - 1];
+  if (t1 - t0 < 30000) return null;
+  const speed = (c1 - c0) / ((t1 - t0) / 1000); // chain seconds per real second
+  return speed > 1.01 ? Math.round(lag / (speed - 1)) : null;
+}
+
 function renderStatus(s) {
   if ($("dot").dataset.glyph !== s.glyph) {
     $("dot").dataset.glyph = s.glyph;
@@ -113,19 +136,25 @@ function renderStatus(s) {
     const now = Date.now();
     headSamples.push([now, c.head_block]);
     while (headSamples.length && now - headSamples[0][0] > 60000) headSamples.shift();
-  } else if (!running) headSamples.length = 0;
+    chainTimeSamples.push([now, c.head_time]);
+    while (chainTimeSamples.length && now - chainTimeSamples[0][0] > 300000) chainTimeSamples.shift();
+  } else if (!running) { headSamples.length = 0; chainTimeSamples.length = 0; }
+  const eta = c && running && !s.synced ? secondsToSync(s.lag_seconds) : null;
 
   let pct = null, title = t("dash.sync");
   if (s.phase === "starting" && s.log.replay_percent != null) { pct = s.log.replay_percent; title = t("dash.replay"); }
   else if (c && running) pct = s.sync_percent;
   $("progress-title").textContent = title;
-  $("progress-value").textContent = pct == null ? "—" : `${pct.toFixed(1)}%`;
+  $("progress-value").textContent = pct == null ? "—"
+    : eta != null && title === t("dash.sync") ? `${pct.toFixed(1)}% · ${t("dash.eta_left", { t: human(eta) })}`
+    : `${pct.toFixed(1)}%`;
   $("progress-bar").style.width = `${pct || 0}%`;
 
   $("head").textContent = fmt(c ? c.head_block : s.log.last_block);
   $("irr").textContent = fmt(c && c.irreversible_block);
   $("lag").textContent = c && running ? human(s.lag_seconds) : "—";
   $("rate").textContent = fmt(blocksPerMinute());
+  $("eta").textContent = eta != null ? `≈ ${human(eta)}` : "—";
   $("chain").textContent = (c && c.chain_id) || s.log.chain_id || "—";
   $("rpc").textContent = `ws://${s.rpc_endpoint}`;
   $("datadir").textContent = s.data_dir;

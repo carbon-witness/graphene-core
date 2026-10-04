@@ -15,6 +15,7 @@
   "dash.irreversible": "Irreversible",
   "dash.lag": "Behind",
   "dash.rate": "Blocks per minute",
+  "dash.eta": "Time to sync",
   "dash.chain_id": "Chain ID",
   "dash.rpc": "RPC",
   "dash.copy": "copy",
@@ -65,7 +66,9 @@
   "dur.s": "{n} s",
   "dur.min": "{n} min",
   "dur.h": "{n} h",
-  "dur.d": "{n} d",
+  "dur.d_one": "{n} day",
+  "dur.d_few": "{n} days",
+  "dur.d_many": "{n} days",
   "status.stopped": "Node stopped",
   "status.starting": "Starting the node…",
   "status.opening": "Opening the database…",
@@ -156,5 +159,6 @@
   "seeds.remove_confirm": "Remove seed {addr} from config.ini? The node forgets it at its next start.",
   "seeds.invalid": "\"{addr}\" is not host:port",
   "seeds.exists": "{addr} is already in the list",
-  "seeds.state.handshaking": "handshaking…"
+  "seeds.state.handshaking": "handshaking…",
+  "dash.eta_left": "≈ {t} left"
 }
