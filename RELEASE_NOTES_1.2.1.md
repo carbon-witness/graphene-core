@@ -152,11 +152,14 @@ A Tauri 2 app, `gui/` in this repository, version 0.1.0.
   from the node's anonymous `database` API over WebSocket and from its log.
 - **Journal:** the node's log, coloured by level as in a Linux console, with a filter by level and a "Blocks" view.
   The journal and the blocks table keep the newest 5000 rows.
-- **Peers:** the connected P2P peers with address, direction, software, platform, the peer's block, connection time
+- **Peers:** the connected P2P peers with address, direction, release, software, platform, the peer's block, connection time
   and traffic. The list comes from the node's `network_node` API, which anonymous clients cannot use: unless
   `config.ini` sets `api-access`, the app writes `graphene-node-gui-api.json` into the data folder with the node's
   default anonymous access unchanged plus an account for the app (a random password per node start, kept in
   `graphene-node-gui.lock`), and starts the node with `--api-access`.
+- **Peer release.** From 1.2.1 on, the node's P2P user agent carries its build string (see below). Older
+  releases send no version; the app recognises 1.0, 1.1 and 1.2.0 by the commit time of the fc library they
+  report, and marks other builds with "?".
 - **No blocks from the network.** Behind and without a new block for 90 s, the status says so. With no peers it
   points at unreachable seed nodes and a firewall; with peers it shows how many are connected.
 - **Actions:** start, stop and restart, as buttons of one width with player glyphs. While stopping, the status shows
@@ -275,6 +278,12 @@ Stop it first: two nodes on one data directory corrupt its database.
 The lock is released with the process, even after a crash or `kill -9`, so there is never a stale lock file to remove.
 Commit: graphene-core `434a654`.
 
+## P2P user agent with the build string
+
+The P2P hello message carries no version, so peers could not tell releases apart. The node's user agent is now
+`Graphene Reference Implementation <build>`, e.g. `Graphene Reference Implementation 1.2.1-286e080c`. The hello
+message itself is unchanged.
+
 ## Log format
 
 File appender lines now carry the level before the `]`:
@@ -291,6 +300,7 @@ Commit: graphene-fc `9706c96`.
 - No protocol changes and no hardforks; the database format is unchanged.
 - **Exit code 3** is new: another node holds the data directory. Service managers that restart on failure will retry
   until the other node stops.
+- **P2P user agent:** `Graphene Reference Implementation` is followed by the build string.
 - **Log format:** lines in the file log have a new level field. Tools that parse the log by column position need
   updating.
 - **Lock file:** `witness_node.lock` appears in the data directory. Do not delete it while a node is running. Deleting
