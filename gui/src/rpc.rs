@@ -155,6 +155,32 @@ pub struct PotentialPeer {
     pub last_attempt: i64,
     pub failures: u32,
     pub error: String,
+    /// From a handshake that stalled ("Terminating handshaking connection due to inactivity"): how long it
+    /// waited, the step it stopped at (the peer connection's negotiation status) and the bytes each way
+    pub stalled: Option<Stall>,
+}
+
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct Stall {
+    pub timeout: u64,
+    pub stage: String,
+    pub sent: u64,
+    pub received: u64,
+}
+
+/// The fields of the node's "Terminating handshaking connection due to inactivity" error, from its log data
+fn stall_of(error: &Value) -> Option<Stall> {
+    let data = error.get("stack")?.as_array()?.iter().find_map(|e| {
+        let d = e.get("data")?;
+        d.get("status").is_some().then_some(d)
+    })?;
+    let n = |k: &str| data.get(k).and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok())).unwrap_or(0);
+    Some(Stall {
+        timeout: n("timeout"),
+        stage: data.get("status").and_then(Value::as_str).unwrap_or_default().to_string(),
+        sent: n("sent"),
+        received: n("received"),
+    })
 }
 
 pub fn potential_peers(rpc: &mut Rpc) -> Result<Vec<PotentialPeer>, String> {
@@ -165,6 +191,7 @@ pub fn potential_peers(rpc: &mut Rpc) -> Result<Vec<PotentialPeer>, String> {
         last_attempt: p.get("last_connection_attempt_time").and_then(Value::as_str).and_then(parse_time).unwrap_or(0),
         failures: p.get("number_of_failed_connection_attempts").and_then(Value::as_u64).unwrap_or(0) as u32,
         error: p.get("last_error").map(exception_text).unwrap_or_default(),
+        stalled: p.get("last_error").and_then(stall_of),
     };
     Ok(list.as_array().map(|a| a.iter().map(one).collect()).unwrap_or_default())
 }
@@ -309,6 +336,11 @@ mod tests {
             {"context": {}, "format": "", "data": {}}]});
         assert_eq!(exception_text(&e), "disconnecting because we never received a hello");
         assert_eq!(exception_text(&json!({"message": "unspecified", "stack": []})), "unspecified");
+        let stalled = json!({"stack": [{"format": "Terminating handshaking connection due to inactivity of ${timeout} seconds.",
+            "data": {"timeout": 5, "status": "peer_connection_accepted", "sent": 656, "received": 576}}]});
+        let st = stall_of(&stalled).unwrap();
+        assert_eq!((st.timeout, st.stage.as_str(), st.sent, st.received), (5, "peer_connection_accepted", 656, 576));
+        assert!(stall_of(&e).is_none());
     }
 
     #[test]

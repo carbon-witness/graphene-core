@@ -7,7 +7,7 @@
 use crate::i18n::{self, tr, trf};
 use crate::logtail::{LogStage, LogTail};
 use crate::api_access;
-use crate::rpc::{self, ChainInfo, Peer, PotentialPeer, Rpc};
+use crate::rpc::{self, ChainInfo, Peer, PotentialPeer, Rpc, Stall};
 use crate::seeds;
 use std::collections::HashMap;
 use crate::settings::Settings;
@@ -167,6 +167,8 @@ pub struct SeedStatus {
     pub last_attempt: i64,
     pub failures: u32,
     pub error: String,
+    /// Set when the last attempt stalled during the handshake
+    pub stalled: Option<Stall>,
 }
 
 pub struct Supervisor {
@@ -699,6 +701,7 @@ impl Inner {
                     last_attempt: 0,
                     failures: 0,
                     error: String::new(),
+                    stalled: None,
                 };
                 if replaced && source == "builtin" {
                     st.state = "unused";
@@ -725,6 +728,7 @@ impl Inner {
                     st.failures = p.failures;
                     // The error of an earlier attempt means nothing once a connection worked
                     st.error = p.error.clone();
+                    st.stalled = p.stalled.clone();
                     if st.state != "connected" {
                         st.state = match p.disposition.as_str() {
                             "last_connection_succeeded" => "succeeded",
@@ -739,6 +743,7 @@ impl Inner {
                 }
                 if !matches!(st.state, "failed" | "rejected" | "handshake_failed") {
                     st.error.clear();
+                    st.stalled = None;
                 }
                 st
             })

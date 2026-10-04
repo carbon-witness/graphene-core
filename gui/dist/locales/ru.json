@@ -157,5 +157,19 @@
   "seeds.remove": "удалить",
   "seeds.remove_confirm": "Удалить сид {addr} из config.ini? Нода забудет его при следующем запуске.",
   "seeds.invalid": "«{addr}» — не хост:порт",
-  "seeds.exists": "{addr} уже есть в списке"
+  "seeds.exists": "{addr} уже есть в списке",
+  "col.stage": "Остановилось на",
+  "col.bytes": "Отправлено / получено",
+  "seeds.err.inactivity": "нет ответа {s} с",
+  "seeds.stage.disconnected": "отключено",
+  "seeds.stage.connecting": "TCP-соединение",
+  "seeds.stage.connected": "TCP установлено",
+  "seeds.stage.accepting": "входящее",
+  "seeds.stage.accepted": "входящее, принято",
+  "seeds.stage.hello_sent": "приветствие отправлено",
+  "seeds.stage.peer_connection_accepted": "принят, жду список адресов",
+  "seeds.stage.peer_connection_rejected": "сид отказал",
+  "seeds.stage.negotiation_complete": "рукопожатие завершено",
+  "seeds.stage.closing": "закрывается",
+  "seeds.stage.closed": "закрыто"
 }
