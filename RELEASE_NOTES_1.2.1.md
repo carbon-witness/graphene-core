@@ -32,8 +32,9 @@ Consensus rules, block format and serialization are unchanged.
 
 ### Windows
 
-Put three files in one folder: `witness_node.exe`, `graphene-node-gui.exe` and `WebView2Loader.dll`, then run
-`graphene-node-gui.exe`. By default the app uses `witness_node.exe` and `witness_node_data_dir` next to itself. The
+Download `graphene-node-win64-1.2.1.zip` from the GitHub release, unpack it and run `graphene-node-gui.exe`. The zip
+holds three files that must stay in one folder: `witness_node.exe`, `graphene-node-gui.exe` and `WebView2Loader.dll`.
+By default the app uses `witness_node.exe` and `witness_node_data_dir` next to itself. The
 WebView2 runtime ships with Windows 10 and 11.
 
 `witness_node.exe` also runs on its own, from `cmd` or PowerShell, like the Linux node.
@@ -69,6 +70,19 @@ contrib/win64/build.sh ~/win64-deps build-win64   # -> build-win64/programs/witn
   - `_WIN32_WINNT` raised to Windows 10, for `WaitOnAddress` in Boost.Atomic.
 
 The GUI is built with Cargo for the `x86_64-pc-windows-gnu` target; see [gui/README.md](gui/README.md).
+
+### CI
+
+The new workflow `.github/workflows/windows.yml` cross-builds the Windows package on `ubuntu-24.04` on every push and
+pull request:
+
+- **Build:** `witness_node.exe` with `contrib/win64/`, then `graphene-node-gui.exe` with Cargo; the GUI's tests run
+  under Wine.
+- **Smoke test:** `witness_node.exe --version` runs under Wine.
+- **Package:** `graphene-node-win64-<version>.zip` with `witness_node.exe`, `graphene-node-gui.exe` and
+  `WebView2Loader.dll`. Every run keeps it as an artifact; a tag `graphene-X.Y.Z` attaches it to the release.
+- **Caches:** the dependencies are cached by the hash of `build-deps.sh`, so they are built only once; the node is
+  built with ccache.
 
 ```
 rustup target add x86_64-pc-windows-gnu
@@ -274,8 +288,6 @@ Commit: graphene-fc `9706c96`.
 
 ## Known limitations
 
-- **Windows builds are not produced by CI.** `witness_node.exe` and `graphene-node-gui.exe` are built by hand with
-  `contrib/win64/` and Cargo. The Docker workflow still builds only the Linux image.
 - **No installer.** The Windows files are shipped as a folder.
 - **GUI tests.** The GUI's supervisor tests run under Wine. The window itself (WebView2) was checked by hand on
   Windows 10.
