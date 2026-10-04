@@ -33,8 +33,8 @@ Consensus rules, block format and serialization are unchanged.
 ### Windows
 
 Download `graphene-node-win64-1.2.1.zip` from the GitHub release, unpack it and run `graphene-node-gui.exe`. The zip
-holds three files that must stay in one folder, `witness_node.exe`, `graphene-node-gui.exe` and `WebView2Loader.dll`,
-and `LICENSE.txt`.
+holds `witness_node.exe`, `graphene-node-gui.exe` and `WebView2Loader.dll`, which must stay in one folder, and
+`LICENSE.txt`.
 By default the app uses `witness_node.exe` and `witness_node_data_dir` next to itself. The
 WebView2 runtime ships with Windows 10 and 11.
 
