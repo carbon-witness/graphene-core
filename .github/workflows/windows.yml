@@ -49,8 +49,9 @@ jobs:
           wineboot --init
           wineserver --wait
 
-      # Boost, OpenSSL, zlib and curl take about 30 minutes; they change only with build-deps.sh
-      - uses: actions/cache@v6
+      # Boost, OpenSSL, zlib and curl take about 30 minutes; they change only with build-deps.sh.
+      # Saved right after they are built, so a later failing step does not lose them.
+      - uses: actions/cache/restore@v6
         id: deps
         with:
           path: |
@@ -64,7 +65,16 @@ jobs:
           contrib/win64/build-deps.sh "$DEPS"
           rm -rf "$DEPS/src"
 
-      - uses: actions/cache@v6
+      - uses: actions/cache/save@v6
+        if: steps.deps.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ${{ env.DEPS }}/include
+            ${{ env.DEPS }}/lib
+          key: ${{ steps.deps.outputs.cache-primary-key }}
+
+      - uses: actions/cache/restore@v6
+        id: ccache
         with:
           path: ${{ env.CCACHE_DIR }}
           key: win64-ccache-${{ github.ref_name }}-${{ github.sha }}
@@ -79,6 +89,13 @@ jobs:
           ccache --show-stats
           x86_64-w64-mingw32-strip build-win64/programs/witness_node/witness_node.exe
           wine build-win64/programs/witness_node/witness_node.exe --version
+
+      # Also after a failed build: the objects compiled so far are what the next run needs
+      - uses: actions/cache/save@v6
+        if: always() && steps.ccache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.ccache.outputs.cache-primary-key }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
