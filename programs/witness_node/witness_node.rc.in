@@ -19,7 +19,7 @@ BEGIN
       VALUE "FileDescription",  "Graphene witness node"
       VALUE "FileVersion",      "@GRAPHENE_VERSION@"
       VALUE "InternalName",     "witness_node"
-      VALUE "LegalCopyright",   "Copyright (c) 2015-2026 Cryptonomex Inc. and contributors. MIT License."
+      VALUE "LegalCopyright",   "Copyright (c) 2026 Graphene contributors. MIT License."
       VALUE "OriginalFilename", "witness_node.exe"
       VALUE "ProductName",      "Graphene"
       VALUE "ProductVersion",   "@GRAPHENE_GIT_REVISION_DESCRIPTION@"
