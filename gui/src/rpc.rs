@@ -96,8 +96,9 @@ pub struct Peer {
     pub addr: String,
     pub inbound: bool,
     pub user_agent: String,
-    /// The release the peer runs, see peer_version
+    /// The release the peer runs and the commit it was built from, see peer_version
     pub version: String,
+    pub build: String,
     pub platform: String,
     /// Unix seconds
     pub connected_since: i64,
@@ -124,7 +125,8 @@ fn parse_peer(p: &Value) -> Peer {
     Peer {
         addr: s("addr"),
         inbound: info.get("inbound").and_then(Value::as_bool).unwrap_or(false),
-        version: peer_version(&s("subver"), time("fc_git_revision_unix_timestamp")),
+        version: String::new(),
+        build: String::new(),
         user_agent: s("subver"),
         platform: s("platform"),
         connected_since: time("conntime"),
@@ -133,34 +135,82 @@ fn parse_peer(p: &Value) -> Peer {
         bytes_received: n("bytesrecv"),
         head_block: n("current_head_block_number"),
     }
+    .with_version(time("fc_git_revision_unix_timestamp"))
+}
+
+impl Peer {
+    fn with_version(mut self, fc_time: i64) -> Peer {
+        (self.version, self.build) = peer_version(&self.user_agent, fc_time);
+        self
+    }
+}
+
+/// An endpoint the node knows of, from network_node.get_potential_peers
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct PotentialPeer {
+    pub addr: String,
+    /// never_attempted_to_connect, last_connection_failed, last_connection_rejected,
+    /// last_connection_handshaking_failed or last_connection_succeeded
+    pub disposition: String,
+    pub last_attempt: i64,
+    pub failures: u32,
+    pub error: String,
+}
+
+pub fn potential_peers(rpc: &mut Rpc) -> Result<Vec<PotentialPeer>, String> {
+    let list = rpc.call(json!("network_node"), "get_potential_peers", json!([]))?;
+    let one = |p: &Value| PotentialPeer {
+        addr: p.get("endpoint").and_then(Value::as_str).unwrap_or_default().to_string(),
+        disposition: p.get("last_connection_disposition").and_then(Value::as_str).unwrap_or_default().to_string(),
+        last_attempt: p.get("last_connection_attempt_time").and_then(Value::as_str).and_then(parse_time).unwrap_or(0),
+        failures: p.get("number_of_failed_connection_attempts").and_then(Value::as_u64).unwrap_or(0) as u32,
+        // An fc::exception: its message, e.g. "Connection refused" or "Operation timed out"
+        error: p
+            .get("last_error")
+            .and_then(|e| e.get("message").or_else(|| e.get("name")))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+    };
+    Ok(list.as_array().map(|a| a.iter().map(one).collect()).unwrap_or_default())
+}
+
+/// Asks the running node to try an endpoint ("1.2.3.4:1776"); it joins the node's list of potential peers.
+pub fn add_node(rpc: &mut Rpc, endpoint: &str) -> Result<(), String> {
+    rpc.call(json!("network_node"), "add_node", json!([endpoint])).map(|_| ())
 }
 
 const GRAPHENE_AGENT: &str = "Graphene Reference Implementation";
 const BITSHARES_AGENT: &str = "BitShares Reference Implementation";
-/// Commit times of the fc library in each release build: before 1.2.1 the P2P hello carries no version, only
-/// the fc revision. 1.2.0 was tagged in two repositories, on different fc commits.
-const RELEASE_FC_TIMES: [(i64, &str); 4] = [
-    (1569050266, "1.0"),   // graphene-fc 6d8d030
-    (1789991063, "1.1"),   // graphene-fc f17ef47
-    (1790499127, "1.2.0"), // carbon-witness/graphene-fc 551377b
-    (1790609551, "1.2.0"), // graphene-blockchain/graphene-fc 0a5fcbe
+/// Release builds before 1.2.1, by the commit time of the fc library they report (the P2P hello carries no
+/// version): release, graphene-core commit of its tag. 1.2.0 was tagged in two repositories, on different
+/// fc commits.
+const RELEASE_FC_TIMES: [(i64, &str, &str); 4] = [
+    (1569050266, "1.0", "23df6159"),   // graphene-fc 6d8d030
+    (1789991063, "1.1", "fd7c7dff"),   // graphene-fc f17ef47
+    (1790499127, "1.2.0", "d5a98f9a"), // carbon-witness/graphene-fc 551377b
+    (1790609551, "1.2.0", "9a37e5a9"), // graphene-blockchain/graphene-fc 0a5fcbe
 ];
 
-/// The release a peer runs. From 1.2.1 on, the user agent ends with the build string ("... 1.2.1-286e0801");
-/// older releases are recognised by their fc revision time, and by the user agent: up to 1.1 the node called
-/// itself BitShares. "?" marks a guess for a build that is no release.
-pub fn peer_version(user_agent: &str, fc_time: i64) -> String {
+/// The release a peer runs and the graphene-core commit it was built from. From 1.2.1 on, the user agent ends
+/// with the build string ("... 1.2.1-286e0801"); older releases are recognised by their fc revision time, and
+/// by the user agent: up to 1.1 the node called itself BitShares. "?" marks what cannot be told.
+pub fn peer_version(user_agent: &str, fc_time: i64) -> (String, String) {
     if let Some(build) = user_agent.strip_prefix(GRAPHENE_AGENT).map(str::trim).filter(|b| !b.is_empty()) {
-        return build.to_string();
+        return match build.rsplit_once('-') {
+            Some((v, commit)) => (v.to_string(), commit.to_string()),
+            None => (build.to_string(), "?".into()),
+        };
     }
-    if let Some((_, v)) = RELEASE_FC_TIMES.iter().find(|(t, _)| *t == fc_time) {
-        return v.to_string();
+    if let Some((_, v, commit)) = RELEASE_FC_TIMES.iter().find(|(t, _, _)| *t == fc_time) {
+        return (v.to_string(), commit.to_string());
     }
-    match user_agent {
-        GRAPHENE_AGENT => "1.2.0?".into(),
-        BITSHARES_AGENT => "≤ 1.1?".into(),
-        _ => "?".into(),
-    }
+    let v = match user_agent {
+        GRAPHENE_AGENT => "1.2.0?",
+        BITSHARES_AGENT => "≤ 1.1?",
+        _ => "?",
+    };
+    (v.into(), "?".into())
 }
 
 /// "2021-04-14T21:02:45" (UTC, as the node prints it) to Unix seconds.
@@ -218,14 +268,18 @@ mod tests {
 
     #[test]
     fn tells_releases_apart() {
-        assert_eq!(peer_version("Graphene Reference Implementation 1.2.1-286e0801", 0), "1.2.1-286e0801");
-        assert_eq!(peer_version("Graphene Reference Implementation", 1790499127), "1.2.0");
-        assert_eq!(peer_version("Graphene Reference Implementation", 1790609551), "1.2.0");
-        assert_eq!(peer_version("BitShares Reference Implementation", 1789991063), "1.1");
-        assert_eq!(peer_version("BitShares Reference Implementation", 1569050266), "1.0");
-        assert_eq!(peer_version("BitShares Reference Implementation", 1), "≤ 1.1?");
-        assert_eq!(peer_version("Graphene Reference Implementation", 1), "1.2.0?");
-        assert_eq!(peer_version("Something else", 1), "?");
+        let v = |a: &str, t: i64| {
+            let (v, b) = peer_version(a, t);
+            format!("{v} {b}")
+        };
+        assert_eq!(v("Graphene Reference Implementation 1.2.1-286e0801", 0), "1.2.1 286e0801");
+        assert_eq!(v("Graphene Reference Implementation", 1790499127), "1.2.0 d5a98f9a");
+        assert_eq!(v("Graphene Reference Implementation", 1790609551), "1.2.0 9a37e5a9");
+        assert_eq!(v("BitShares Reference Implementation", 1789991063), "1.1 fd7c7dff");
+        assert_eq!(v("BitShares Reference Implementation", 1569050266), "1.0 23df6159");
+        assert_eq!(v("BitShares Reference Implementation", 1), "≤ 1.1? ?");
+        assert_eq!(v("Graphene Reference Implementation", 1), "1.2.0? ?");
+        assert_eq!(v("Something else", 1), "? ?");
     }
 
     #[test]

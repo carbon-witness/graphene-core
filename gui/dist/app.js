@@ -133,6 +133,7 @@ function renderStatus(s) {
   $("lastexit").textContent = s.last_exit || "—";
   $("peer-count").textContent = s.peers ? fmt(s.peers.length) : (running && s.peers_note) || "—";
   renderPeers(s);
+  renderSeeds(s);
 }
 
 // ---------- peers ----------
@@ -158,7 +159,7 @@ function renderPeers(s) {
   const body = $("peer-table").tBodies[0];
   body.replaceChildren(...[...peers].sort((a, b) => a.connected_since - b.connected_since).map((p) => {
     const tr = document.createElement("tr");
-    for (const v of [p.addr, t(p.inbound ? "peers.inbound" : "peers.outbound"), p.version || "?", p.user_agent || "—",
+    for (const v of [p.addr, t(p.inbound ? "peers.inbound" : "peers.outbound"), p.version || "?", p.build || "?",
                      p.platform || "—", fmt(p.head_block), ago(p.connected_since), ago(p.last_received),
                      bytes(p.bytes_received), bytes(p.bytes_sent)]) {
       const td = document.createElement("td");
@@ -169,6 +170,45 @@ function renderPeers(s) {
   }));
   $("peer-table").classList.toggle("hidden", !peers.length);
 }
+
+// ---------- seeds ----------
+function renderSeeds(s) {
+  const now = Date.now() / 1000;
+  const body = $("seed-table").tBodies[0];
+  body.replaceChildren(...(s.seeds || []).map((seed) => {
+    const tr = document.createElement("tr");
+    const cells = [seed.addr, seed.ips.join(", ") || "—", t(`seeds.source.${seed.source}`),
+                   t(`seeds.state.${seed.state}`),
+                   seed.last_attempt ? human(Math.max(0, Math.round(now - seed.last_attempt))) : "—",
+                   seed.failures ? fmt(seed.failures) : "—", seed.error || ""];
+    cells.forEach((v, i) => {
+      const td = document.createElement("td");
+      td.textContent = v;
+      if (i === 3) td.className = `seed-${seed.state}`;
+      tr.append(td);
+    });
+    const td = document.createElement("td");
+    if (seed.source === "seed_node") {
+      const b = document.createElement("button");
+      b.className = "link";
+      b.textContent = t("seeds.remove");
+      b.onclick = async () => {
+        if (await ask(t("seeds.remove_confirm", { addr: seed.addr }), { title: "Graphene Node", kind: "warning" }))
+          call("remove_seed", { addr: seed.addr });
+      };
+      td.append(b);
+    }
+    tr.append(td);
+    return tr;
+  }));
+}
+
+$("seed-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const addr = $("seed-addr").value.trim();
+  await call("add_seed", { addr });
+  $("seed-addr").value = "";
+});
 
 $("btn-start").onclick = () => invoke("node_start").catch(() => {}); // a failure opens an error box
 $("btn-stop").onclick = () => call("node_stop");

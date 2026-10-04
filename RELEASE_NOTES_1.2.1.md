@@ -152,14 +152,23 @@ A Tauri 2 app, `gui/` in this repository, version 0.1.0.
   from the node's anonymous `database` API over WebSocket and from its log.
 - **Journal:** the node's log, coloured by level as in a Linux console, with a filter by level and a "Blocks" view.
   The journal and the blocks table keep the newest 5000 rows.
-- **Peers:** the connected P2P peers with address, direction, release, software, platform, the peer's block, connection time
-  and traffic. The list comes from the node's `network_node` API, which anonymous clients cannot use: unless
-  `config.ini` sets `api-access`, the app writes `graphene-node-gui-api.json` into the data folder with the node's
-  default anonymous access unchanged plus an account for the app (a random password per node start, kept in
+- **Seeds and Peers:**
+  - *Default seeds:* the node's built-in seeds (the same `seed-nodes.txt` the node compiles in) and the
+    `seed-node` entries of `config.ini`, with their IP addresses and the node's last attempt to reach each one:
+    connected, failed, rejected, handshake failed or not tried yet, with the error. **Add seed** writes
+    `seed-node = host:port` into `config.ini` in the data folder, where the node reads it at every start, and
+    passes it to a running node at once (`network_node.add_node`); added seeds can be removed again. A
+    `seed-nodes` list in `config.ini` replaces the built-in seeds, which are then shown as not used.
+  - *Peers:* the connected P2P peers with address, direction, release, build, platform, the peer's block,
+    connection time and traffic.
+
+  The data comes from the node's `network_node` API, which anonymous clients cannot use: unless `config.ini`
+  sets `api-access`, the app writes `graphene-node-gui-api.json` into the data folder with the node's default
+  anonymous access unchanged plus an account for the app (a random password per node start, kept in
   `graphene-node-gui.lock`), and starts the node with `--api-access`.
-- **Peer release.** From 1.2.1 on, the node's P2P user agent carries its build string (see below). Older
-  releases send no version; the app recognises 1.0, 1.1 and 1.2.0 by the commit time of the fc library they
-  report, and marks other builds with "?".
+- **Peer release and build.** From 1.2.1 on, the node's P2P user agent carries its build string (see below).
+  Older releases send no version; the app recognises 1.0, 1.1 and 1.2.0 by the commit time of the fc library
+  they report and shows the commit of their release tag as the build; other builds get a "?".
 - **No blocks from the network.** Behind and without a new block for 90 s, the status says so. With no peers it
   points at unreachable seed nodes and a firewall; with peers it shows how many are connected.
 - **Actions:** start, stop and restart, as buttons of one width with player glyphs. While stopping, the status shows

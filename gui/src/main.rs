@@ -68,6 +68,16 @@ fn error_dialog(app: &AppHandle, message: String) {
 }
 
 #[tauri::command]
+fn add_seed(st: State<AppState>, addr: String) -> Result<(), String> {
+    st.sup.add_seed(&addr)
+}
+
+#[tauri::command]
+fn remove_seed(st: State<AppState>, addr: String) -> Result<(), String> {
+    st.sup.remove_seed(&addr)
+}
+
+#[tauri::command]
 fn node_kill(st: State<AppState>) -> Result<(), String> {
     st.sup.kill()
 }
@@ -381,6 +391,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_status,
+            add_seed,
+            remove_seed,
             get_log,
             get_languages,
             get_autostart,

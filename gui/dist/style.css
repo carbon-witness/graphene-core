@@ -73,6 +73,12 @@ table.blocks { display: block; border-collapse: collapse; width: 100%; font-vari
 .blocks td.slow { color: var(--yellow); font-weight: 600; }
 /* The peers table sizes to its rows; the page scrolls */
 table.peers { display: table; flex: none; min-height: 0; }
+#peers h3 { margin: 4px 0 8px; font-size: 15px; } #peers h3 + * { margin-top: 0; }
+#peers table.peers { margin-bottom: 20px; }
+#seed-addr { min-width: 220px; }
+.seed-connected { color: var(--green); font-weight: 600; }
+.seed-failed, .seed-rejected, .seed-handshake_failed, .seed-unresolved { color: var(--red); }
+.seed-unused, .seed-never, .seed-unknown { color: var(--muted); }
 .journal-status.warn { color: var(--yellow); font-weight: 600; }
 .latest { position: fixed; right: 28px; bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
 form { max-width: 640px; display: flex; flex-direction: column; gap: 12px; }
