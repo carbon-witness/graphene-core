@@ -83,7 +83,7 @@ form#seed-form { flex-direction: row; max-width: none; gap: 8px; margin-bottom: 
 #seed-table td.err { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
 .seed-connected { color: var(--green); font-weight: 600; }
 .seed-failed, .seed-rejected, .seed-handshake_failed, .seed-unresolved { color: var(--red); }
-.seed-unused, .seed-never, .seed-unknown { color: var(--muted); }
+.seed-unused, .seed-never, .seed-unknown, .seed-handshaking { color: var(--muted); }
 .journal-status.warn { color: var(--yellow); font-weight: 600; }
 .latest { position: fixed; right: 28px; bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
 form { max-width: 640px; display: flex; flex-direction: column; gap: 12px; }

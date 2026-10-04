@@ -161,7 +161,7 @@ pub struct SeedStatus {
     /// builtin, seed_node (config.ini; the app can add and remove these) or seed_nodes (config.ini list)
     pub source: &'static str,
     pub ips: Vec<String>,
-    /// connected, succeeded, failed, rejected, handshake_failed, never, unresolved, unused (replaced by
+    /// connected, succeeded, handshaking, failed, rejected, handshake_failed, never, unresolved, unused (replaced by
     /// seed-nodes in config.ini) or unknown (no data from the node)
     pub state: &'static str,
     pub last_attempt: i64,
@@ -734,6 +734,10 @@ impl Inner {
                             "last_connection_succeeded" => "succeeded",
                             "last_connection_failed" => "failed",
                             "last_connection_rejected" => "rejected",
+                            // The node sets this when the handshake starts and changes it when it ends, so a
+                            // fresh one without an error is a handshake still under way
+                            "last_connection_handshaking_failed"
+                                if p.error.is_empty() && now_unix() - p.last_attempt < 30 => "handshaking",
                             "last_connection_handshaking_failed" => "handshake_failed",
                             _ => "never",
                         };
