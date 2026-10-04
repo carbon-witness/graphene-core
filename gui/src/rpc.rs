@@ -236,7 +236,7 @@ const RELEASE_FC_TIMES: [(i64, &str, &str); 5] = [
     (1569050266, "1.0", "23df6159"),   // graphene-fc 6d8d030
     (1789458113, "1.1 carbon-build", "a108c380"), // carbon-witness/graphene-fc a108c38, the build is the fc commit
     (1789991063, "1.1", "fd7c7dff"),   // graphene-fc f17ef47
-    (1790499127, "1.2.0", "d5a98f9a"), // carbon-witness/graphene-fc 551377b
+    (1790499127, "1.2.0 carbon-build", "d5a98f9a"), // carbon-witness/graphene-fc 551377b
     (1790609551, "1.2.0", "9a37e5a9"), // graphene-blockchain/graphene-fc 0a5fcbe
 ];
 
@@ -321,7 +321,7 @@ mod tests {
             format!("{v} {b}")
         };
         assert_eq!(v("Graphene Reference Implementation 1.2.1-286e0801", 0), "1.2.1 286e0801");
-        assert_eq!(v("Graphene Reference Implementation", 1790499127), "1.2.0 d5a98f9a");
+        assert_eq!(v("Graphene Reference Implementation", 1790499127), "1.2.0 carbon-build d5a98f9a");
         assert_eq!(v("Graphene Reference Implementation", 1790609551), "1.2.0 9a37e5a9");
         assert_eq!(v("BitShares Reference Implementation", 1789991063), "1.1 fd7c7dff");
         assert_eq!(v("BitShares Reference Implementation", 1569050266), "1.0 23df6159");
