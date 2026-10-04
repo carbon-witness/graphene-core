@@ -15,6 +15,7 @@
   "dash.irreversible": "Необратимый",
   "dash.lag": "Отставание",
   "dash.rate": "Блоков в минуту",
+  "dash.eta": "До синхронизации",
   "dash.chain_id": "Chain ID",
   "dash.rpc": "RPC",
   "dash.copy": "скопировать",
@@ -65,7 +66,9 @@
   "dur.s": "{n} с",
   "dur.min": "{n} мин",
   "dur.h": "{n} ч",
-  "dur.d": "{n} дн",
+  "dur.d_one": "{n} день",
+  "dur.d_few": "{n} дня",
+  "dur.d_many": "{n} дней",
   "status.stopped": "Нода остановлена",
   "status.starting": "Запуск ноды…",
   "status.opening": "Открываю базу данных…",
@@ -156,5 +159,6 @@
   "seeds.remove_confirm": "Удалить сид {addr} из config.ini? Нода забудет его при следующем запуске.",
   "seeds.invalid": "«{addr}» — не хост:порт",
   "seeds.exists": "{addr} уже есть в списке",
-  "seeds.state.handshaking": "идёт рукопожатие…"
+  "seeds.state.handshaking": "идёт рукопожатие…",
+  "dash.eta_left": "осталось ≈ {t}"
 }

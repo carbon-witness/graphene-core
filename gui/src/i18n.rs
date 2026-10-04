@@ -44,15 +44,30 @@ pub fn trf(lang: &str, key: &str, args: &[(&str, String)]) -> String {
     s
 }
 
+/// The plural form of a count for a key with "_one", "_few" and "_many" variants: Russian has three forms
+/// ("21 день", "22 дня", "25 дней"), English uses the same text for all of them.
+pub fn plural_key(lang: &str, key: &str, n: i64) -> String {
+    let form = match lang {
+        "ru" => match (n % 10, n % 100) {
+            (1, r) if r != 11 => "one",
+            (2..=4, r) if !(12..=14).contains(&r) => "few",
+            _ => "many",
+        },
+        _ if n == 1 => "one",
+        _ => "many",
+    };
+    format!("{key}_{form}")
+}
+
 pub fn duration(lang: &str, secs: i64) -> String {
     let s = secs.max(0);
     let (key, n) = match s {
-        0..=119 => ("dur.s", s),
-        120..=7199 => ("dur.min", s / 60),
-        7200..=172_799 => ("dur.h", s / 3600),
-        _ => ("dur.d", s / 86400),
+        0..=119 => ("dur.s".to_string(), s),
+        120..=7199 => ("dur.min".to_string(), s / 60),
+        7200..=172_799 => ("dur.h".to_string(), s / 3600),
+        _ => (plural_key(lang, "dur.d", s / 86400), s / 86400),
     };
-    trf(lang, key, &[("n", n.to_string())])
+    trf(lang, &key, &[("n", n.to_string())])
 }
 
 #[cfg(test)]
@@ -67,6 +82,15 @@ mod tests {
                 assert!(table.contains_key(key), "{lang} lacks {key}");
             }
         }
+    }
+
+    #[test]
+    fn says_days_in_full() {
+        assert_eq!(duration("en", 1903 * 86400), "1903 days");
+        assert_eq!(duration("ru", 1903 * 86400), "1903 дня");
+        assert_eq!(duration("ru", 1901 * 86400), "1901 день");
+        assert_eq!(duration("ru", 1911 * 86400), "1911 дней");
+        assert_eq!(duration("ru", 1905 * 86400), "1905 дней");
     }
 
     #[test]
