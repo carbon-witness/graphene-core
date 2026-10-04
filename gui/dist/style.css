@@ -80,7 +80,6 @@ table.peers th { position: static; }
 /* The add-seed form is a toolbar row, not a settings column */
 form#seed-form { flex-direction: row; max-width: none; gap: 8px; margin-bottom: 8px; }
 #seed-addr { min-width: 260px; }
-#seed-table td.err { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
 .seed-connected { color: var(--green); font-weight: 600; }
 .seed-failed, .seed-rejected, .seed-handshake_failed, .seed-unresolved { color: var(--red); }
 .seed-unused, .seed-never, .seed-unknown, .seed-handshaking { color: var(--muted); }
