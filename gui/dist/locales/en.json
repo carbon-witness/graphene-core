@@ -171,5 +171,6 @@
   "seeds.stage.peer_connection_rejected": "rejected by the seed",
   "seeds.stage.negotiation_complete": "handshake done",
   "seeds.stage.closing": "closing",
-  "seeds.stage.closed": "closed"
+  "seeds.stage.closed": "closed",
+  "seeds.state.handshaking": "handshaking…"
 }

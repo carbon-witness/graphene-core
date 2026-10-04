@@ -171,5 +171,6 @@
   "seeds.stage.peer_connection_rejected": "сид отказал",
   "seeds.stage.negotiation_complete": "рукопожатие завершено",
   "seeds.stage.closing": "закрывается",
-  "seeds.stage.closed": "закрыто"
+  "seeds.stage.closed": "закрыто",
+  "seeds.state.handshaking": "идёт рукопожатие…"
 }
