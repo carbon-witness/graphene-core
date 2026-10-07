@@ -203,7 +203,7 @@ To report a problem, attach:
 | `witness_node_data_dir\config.ini` | the node's options, including added seeds |
 | `witness_node_data_dir\witness_node.lock` | held by the running node; do not delete |
 | `witness_node_data_dir\graphene-node-gui.lock` | the node the app started: its PID, RPC address and the app's API password; with them a restarted app finds the running node again |
-| `witness_node_data_dir\graphene-node-gui-api.json` | the app's access to the node's API, for the seed and peer lists |
+| `witness_node_data_dir\graphene-node-gui-api.json` | the node's API permissions the app writes: the default anonymous access plus an account for the app that may use the network API, which gives the seed and peer lists; written only when `config.ini` sets no `api-access` of its own |
 | `%APPDATA%\org.graphene.node-gui\settings.json` | the app's settings |
 | `%APPDATA%\org.graphene.node-gui\gui.log` | what the app did at Windows shutdowns |
 | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, `Graphene Node` | "Start with Windows", when it is on |
