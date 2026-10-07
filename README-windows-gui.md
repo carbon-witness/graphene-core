@@ -35,7 +35,11 @@ Start `graphene-node-gui.exe`.
 
 **Security warning.** The programs are not signed, and Windows marks files downloaded from the internet, so the first
 start may bring up a warning. With SmartScreen on, it is "Windows protected your PC": click **More info**, then
-**Run anyway**. Otherwise it is "Open File - Security Warning" with "Unknown Publisher": click **Run**, after
+**Run anyway**.
+
+![SmartScreen: More info, then Run anyway](images/windows-gui/10-smartscreen.png)
+
+Otherwise it is "Open File - Security Warning" with "Unknown Publisher": click **Run**, after
 clearing "Always ask before opening this file" if you do not want to see it again.
 
 ![Open File - Security Warning: Run](images/windows-gui/10-security-warning.png)
