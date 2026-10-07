@@ -140,6 +140,26 @@ where it stopped instead of replaying the chain. This holds for every way it is 
 If the app crashes or is closed with the node left running, the node goes on. The next start of the app finds it
 again.
 
+## Connecting RuDEX to your node
+
+A wallet or exchange app for Graphene can use your own node instead of a public one: it then talks to the network
+through your computer, with the low latency of a local connection. In the RuDEX app:
+
+1. Wait until the node is in sync (green icon): a node that is still catching up shows old balances and orders.
+2. Open **Settings**, then **Nodes**, then the **Personal** tab, and click **Add node**.
+3. Give it any name and enter the address from the dashboard's **RPC** line (**copy** puts it on the clipboard):
+   `ws://127.0.0.1:8090`. Click **Confirm**.
+
+![RuDEX: Add Node with ws://127.0.0.1:8090](images/windows-gui/12-rudex-add-node.png)
+
+Your node becomes the **Active Node**, with a latency of a few milliseconds; the bar at the bottom shows its name
+and its block. Leave **Automatically select node** off, or the app may switch to a public node.
+
+![RuDEX connected to the local node](images/windows-gui/13-rudex-active-node.png)
+
+The app needs the node running: when you stop it, choose another node in the list or turn **Automatically select
+node** on.
+
 ## Updating
 
 1. **Quit (stop the node)** from the tray.
