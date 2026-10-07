@@ -36,8 +36,6 @@ Start `graphene-node-gui.exe`.
 **SmartScreen.** The programs are not signed, so the first start may bring up "Windows protected your PC". Click
 **More info**, then **Run anyway**.
 
-![SmartScreen: More info, then Run anyway](images/windows-gui/10-smartscreen.png)
-
 **Firewall.** The node listens for other nodes, so Windows may ask whether to allow it on the network. Allow it on
 private networks. Outgoing connections, which the node needs to sync, work either way.
 
@@ -66,8 +64,8 @@ The tray icon shows the node's state at a glance:
 * **Sync**: how far the node has come, by time, with the estimated time left while it catches up.
 * **Block** and **Irreversible**: the node's head block and the last block that can no longer change.
 * **Behind**: how old the head block is. A node in sync is a few seconds behind.
-* **Blocks per minute**: the sync speed. A node in sync gets 20, one block every 3 seconds.
-* **Time to sync**: when the node will catch up at its current speed.
+* **Blocks per minute**: the sync speed. A node in sync gets the blocks as the network makes them, a few dozen a minute.
+* **Time to sync**: when the node will catch up at its current speed; a dash once it is in sync.
 * **RPC**: the node's API address, for wallets and tools on this computer. **copy** puts it on the clipboard.
 * **Data folder**: where the blockchain, `config.ini` and the logs are. **open** shows it in Explorer.
 * **Peers**: how many nodes the node is connected to.
