@@ -14,6 +14,7 @@ Screenshots for [README-windows-gui.md](../../README-windows-gui.md). Each is li
 | `10-smartscreen.png` | SmartScreen's "Windows protected your PC" on the first start of the downloaded app |
 | `10-smartscreen-run.png` | the same after **More info**, with **Run anyway** |
 | `11-firewall.png` | Windows Defender Firewall asking about `witness_node.exe` |
+| `tray-*.png` | the tray icons, drawn from `gui/src/glyphs.rs` at 40 px (shown at 20) |
 
 PNG, the window at its normal size; crop to the window or dialog. Each has a 1px #d0d7de border, as GitHub draws
 its own boxes, so a white window does not merge into the page:
