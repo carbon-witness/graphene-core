@@ -47,8 +47,12 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <websocketpp/version.hpp>
 
+#include <cstdio>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
+
+#include "data_dir_lock.hpp"
 
 #ifdef WIN32
 # include <signal.h>
@@ -56,10 +60,31 @@
 # include <csignal>
 #endif
 
+#ifdef _WIN32
+# include <memory>
+# include <fc/asio.hpp>
+# include "shutdown_watcher.hpp"
+#endif
+
 using namespace graphene;
 namespace bpo = boost::program_options;
 
+// A startup error: shown, then the exit code. Started by double-click on Windows, the console would close with
+// the process before the error could be read, so it waits for Enter there.
+static int startup_failed( int code )
+{
+#ifdef _WIN32
+   witness_node::pause_if_console_closes_on_exit();
+#endif
+   return code;
+}
+
 int main(int argc, char** argv) {
+   // Outlives the node, including the error path below, which closes the database after leaving the try block
+   witness_node::data_dir_lock data_lock;
+#ifdef _WIN32
+   witness_node::shut_down_last();
+#endif
    app::application* node = new app::application();
    fc::oexception unhandled_exception;
    try {
@@ -74,6 +99,13 @@ int main(int argc, char** argv) {
                             ->default_value("witness account_history market_history grouped_orders api_helper_indexes"),
                     "Space-separated list of plugins to activate")
             ("ignore-api-helper-indexes-warning", "Do not exit if api_helper_indexes plugin is not enabled.");
+#ifdef _WIN32
+      app_options.add_options()
+            ("shutdown-event", bpo::value<std::string>(),
+                    "Name of an existing Windows event; exit cleanly when it is signalled")
+            ("parent-pid", bpo::value<uint32_t>(),
+                    "Process ID to watch; exit cleanly when that process exits");
+#endif
 
       bpo::variables_map options;
 
@@ -110,7 +142,7 @@ int main(int argc, char** argv) {
       catch (const boost::program_options::error& e)
       {
          std::cerr << "Error parsing command line: " << e.what() << "\n";
-         return 1;
+         return startup_failed( 1 );
       }
 
       if( options.count("version") )
@@ -133,6 +165,24 @@ int main(int argc, char** argv) {
          return 0;
       }
 
+#ifdef _WIN32
+      std::unique_ptr<witness_node::shutdown_watcher> shutdown_watcher;
+      if( options.count("shutdown-event") || options.count("parent-pid") )
+      {
+         try
+         {
+            shutdown_watcher = std::make_unique<witness_node::shutdown_watcher>(
+                  options.count("shutdown-event") ? options["shutdown-event"].as<std::string>() : std::string(),
+                  options.count("parent-pid") ? options["parent-pid"].as<uint32_t>() : 0 );
+         }
+         catch( const std::runtime_error& e )
+         {
+            std::cerr << e.what() << "\n";
+            return startup_failed( 1 );
+         }
+      }
+#endif
+
       fc::path data_dir;
       if( options.count("data-dir") )
       {
@@ -140,6 +190,15 @@ int main(int argc, char** argv) {
          if( data_dir.is_relative() )
             data_dir = fc::current_path() / data_dir;
       }
+
+      // Before the configuration and the database are touched
+      std::string lock_error;
+      if( !data_lock.acquire( data_dir.string(), lock_error ) )
+      {
+         std::cerr << lock_error << "\n";
+         return startup_failed( witness_node::EXIT_DATA_DIR_IN_USE );
+      }
+
       app::load_configuration_options(data_dir, cfg_options, options);
 
       std::set<std::string> plugins;
@@ -147,7 +206,7 @@ int main(int argc, char** argv) {
 
       if(plugins.count("account_history") && plugins.count("elasticsearch")) {
          std::cerr << "Plugin conflict: Cannot load both account_history plugin and elasticsearch plugin\n";
-         return 1;
+         return startup_failed( 1 );
       }
 
       if( !plugins.count("api_helper_indexes") && !options.count("ignore-api-helper-indexes-warning")
@@ -156,7 +215,7 @@ int main(int argc, char** argv) {
          std::cerr << "\nIf this is an API node, please enable api_helper_indexes plugin."
                       "\nIf this is not an API node, please start with \"--ignore-api-helper-indexes-warning\""
                       " or enable it in config.ini file.\n\n";
-         return 1;
+         return startup_failed( 1 );
       }
 
       std::for_each(plugins.begin(), plugins.end(), [node](const std::string& plug) mutable {
@@ -185,14 +244,47 @@ int main(int argc, char** argv) {
          exit_promise->set_value(signal);
       }, SIGTERM);
 
+#ifdef _WIN32
+      // Called from threads of their own; hand over to the asio thread like the signal handlers above
+      auto request_exit = [exit_promise]( const std::string& reason ) {
+         boost::asio::post( fc::asio::default_io_service(), [exit_promise, reason]() {
+            elog( "${r}, attempting to exit cleanly", ("r", reason) );
+            exit_promise->set_value(SIGTERM);
+         } );
+      };
+      if( shutdown_watcher )
+         shutdown_watcher->start( request_exit );
+      try
+      {
+         witness_node::install_console_close_handler( request_exit );
+      }
+      catch( const std::runtime_error& e )
+      {
+         wlog( "${e}; closing the console window will not stop the node cleanly", ("e", e.what()) );
+      }
+#endif
+
       ilog("Started Graphene node on a chain with ${h} blocks.", ("h", node->chain_database()->head_block_num()));
       ilog("Chain ID is ${id}", ("id", node->chain_database()->get_chain_id()) );
 
       int signal = exit_promise->wait();
       ilog("Exiting from signal ${n}", ("n", signal));
+#ifdef _WIN32
+      shutdown_watcher.reset();
+#endif
+      ilog("Shutdown: stopping plugins");
       node->shutdown_plugins();
       node->shutdown();
       delete node;
+      ilog("Shutdown: done, exiting the process");
+#ifdef _WIN32
+      witness_node::console_close_handled();
+      // Everything that needs a clean close (database, P2P, the log, written with flush) is closed by now.
+      // On Windows the process was seen to hang after this point, in the runtime's static destructors and
+      // thread joins (network threads with live peers), long enough for the GUI to give up on it. End it here.
+      std::fflush( nullptr );
+      _exit( EXIT_SUCCESS );
+#endif
       return EXIT_SUCCESS;
    } catch( const fc::exception& e ) {
       // deleting the node can yield, so do this outside the exception handler
@@ -204,7 +296,10 @@ int main(int argc, char** argv) {
       elog("Exiting with error:\n${e}", ("e", unhandled_exception->to_detail_string()));
       node->shutdown();
       delete node;
-      return EXIT_FAILURE;
+#ifdef _WIN32
+      witness_node::console_close_handled();
+#endif
+      return startup_failed( EXIT_FAILURE );
    }
 }
 

@@ -10,6 +10,8 @@ if(GRAPHENE_GIT_REVISION_SHA MATCHES "^[0-9a-f]+$")
 else()
     set(GRAPHENE_GIT_REVISION_DESCRIPTION "${GRAPHENE_VERSION}")
 endif()
+# Also for the Windows version resource of witness_node (programs/witness_node)
+set(GRAPHENE_GIT_REVISION_DESCRIPTION "${GRAPHENE_GIT_REVISION_DESCRIPTION}" CACHE INTERNAL "Build string")
 
 file(GLOB HEADERS "include/graphene/utilities/*.hpp")
 
