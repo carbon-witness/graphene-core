@@ -98,8 +98,8 @@ connections; how many it gets depends on how many nodes are reachable.
 
 ![Settings](images/windows-gui/06-settings.png)
 
-* **Path to witness_node.exe** and **Data folder**: empty means next to the app, so the whole folder can be moved or
-  copied.
+* **Path to witness_node.exe** and **Data folder**: next to the app by default. The defaults follow the app, so the
+  whole folder can be moved or copied; clearing a field brings its default back.
 * **RPC address**: `127.0.0.1:8090` by default, reachable only from this computer. Any other address opens the node's
   API to the network.
 * **Start the node with the app** and **Start with Windows**: with both on, the node runs whenever you are logged in;
