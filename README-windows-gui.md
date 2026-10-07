@@ -120,7 +120,8 @@ in the tray.
 
 ![Closing the window](images/windows-gui/08-close-dialog.png)
 
-The tray menu opens the dashboard, starts, stops and restarts the node, and quits.
+The tray icon's menu (right click) shows the node's state and does the same without the window: opens the dashboard,
+starts, stops and restarts the node, copies the RPC address, opens the data folder or the log, and quits.
 
 ![Tray menu](images/windows-gui/07-tray-menu.png)
 
