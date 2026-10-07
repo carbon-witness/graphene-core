@@ -11,7 +11,6 @@ Screenshots for [README-windows-gui.md](../../README-windows-gui.md). Each is li
 | `07-tray-menu.png` | the tray icon's menu |
 | `08-close-dialog.png` | the dialog when the window is closed |
 | `09-file-properties.png` | the "Details" tab of `witness_node.exe`'s properties |
-| `10-smartscreen.png` | "Windows protected your PC" on the first start |
 | `11-firewall.png` | Windows Defender Firewall asking about `witness_node.exe` |
 
 PNG, the window at its normal size; crop to the window or dialog.
