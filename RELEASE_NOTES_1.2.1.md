@@ -1,7 +1,7 @@
 # graphene-core 1.2.1
 
-**Date:** October 4, 2026
-**Branch:** `feature/windows-witness-node` ([carbon-witness/graphene-core](https://github.com/carbon-witness/graphene-core/tree/feature/windows-witness-node))
+**Date:** October 7, 2026
+**Branch:** `graphene` ([carbon-witness/graphene-core](https://github.com/carbon-witness/graphene-core/tree/graphene))
 **Tag:** `graphene-1.2.1`
 **Previous version:** 1.2.0 — tag `graphene-1.2.0` (September 27, 2026), [release notes](RELEASE_NOTES_1.2.0.md)
 
@@ -348,8 +348,8 @@ earlier contributors, which the MIT license requires to stay. The Windows zip no
 
 | Repository | Branch | Commit |
 |---|---|---|
-| [carbon-witness/graphene-core](https://github.com/carbon-witness/graphene-core/tree/feature/windows-witness-node) | `feature/windows-witness-node` | `graphene-1.2.1` |
-| [carbon-witness/graphene-fc](https://github.com/carbon-witness/graphene-fc/tree/feature/windows-witness-node) | `feature/windows-witness-node` | `f592269` |
+| [carbon-witness/graphene-core](https://github.com/carbon-witness/graphene-core/tree/graphene) | `graphene` | `graphene-1.2.1` |
+| [carbon-witness/graphene-fc](https://github.com/carbon-witness/graphene-fc/tree/graphene) | `graphene` | `f592269` |
 | [carbon-witness/websocketpp](https://github.com/carbon-witness/websocketpp/tree/graphene) | `graphene` | `571a7b0` |
 | [carbon-witness/editline](https://github.com/carbon-witness/editline/tree/graphene) | `graphene` | `224e256` |
 | [carbon-witness/secp256k1-zkp](https://github.com/carbon-witness/secp256k1-zkp/tree/graphene) | `graphene` | `bd06794` |
@@ -411,6 +411,8 @@ websocketpp, editline and secp256k1-zkp are unchanged since 1.2.0.
 - [`3e1e4f3e`](https://github.com/carbon-witness/graphene-core/commit/3e1e4f3eb3a3dccb3f44f153f9fdb105f0b3d98f) witness_node: Graphene contributors in the version resource's copyright
 - [`480f4ca9`](https://github.com/carbon-witness/graphene-core/commit/480f4ca95ed6f017ae58eb181eb49b795187ed86) LICENSE: add the Graphene contributors; ship LICENSE.txt in the Windows zip
 - [`b7759766`](https://github.com/carbon-witness/graphene-core/commit/b7759766935a7dc05fb3fa80a8812caa1e97b91e) docs: wording of the Windows zip contents
+- [`5d9e91be`](https://github.com/carbon-witness/graphene-core/commit/5d9e91bed3ade633c9093312c3ddd2b633bbdbde) docs: list every commit of the branch in the 1.2.1 notes
+- [`75360026`](https://github.com/carbon-witness/graphene-core/commit/753600266d3caf429cfd254260af53c284b51d90) ci: a failed upload to the build cache no longer fails the Docker build
 
 **graphene-fc**
 - [`ac00004`](https://github.com/carbon-witness/graphene-fc/commit/ac00004908f44669c89b578b56d4af808f7caff0) Build with MinGW-w64 for 64-bit Windows
