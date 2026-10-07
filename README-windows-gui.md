@@ -56,11 +56,11 @@ The tray icon shows the node's state at a glance:
 
 | Icon | State |
 |---|---|
-| Yellow dot | starting or syncing |
-| Green play | running and in sync |
-| Blue-cyan arrow | restarting |
-| Pause | stopped |
-| Red cross | failed, see the dashboard |
+| <img src="images/windows-gui/tray-busy.png" width="20" height="20" alt=""> Yellow dot | starting or syncing |
+| <img src="images/windows-gui/tray-play.png" width="20" height="20" alt=""> Green play | running and in sync |
+| <img src="images/windows-gui/tray-restart.png" width="20" height="20" alt=""> Blue-cyan arrow | restarting |
+| <img src="images/windows-gui/tray-pause.png" width="20" height="20" alt=""> Pause | stopped |
+| <img src="images/windows-gui/tray-cross.png" width="20" height="20" alt=""> Red cross | failed, see the dashboard |
 
 ## The window
 
