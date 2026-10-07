@@ -202,7 +202,7 @@ To report a problem, attach:
 | `witness_node_data_dir\` | the blockchain, `config.ini`, `logs\` |
 | `witness_node_data_dir\config.ini` | the node's options, including added seeds |
 | `witness_node_data_dir\witness_node.lock` | held by the running node; do not delete |
-| `witness_node_data_dir\graphene-node-gui.lock` | which node the app started, so it finds it again |
+| `witness_node_data_dir\graphene-node-gui.lock` | the node the app started: its PID, RPC address and the app's API password; with them a restarted app finds the running node again |
 | `witness_node_data_dir\graphene-node-gui-api.json` | the app's access to the node's API, for the seed and peer lists |
 | `%APPDATA%\org.graphene.node-gui\settings.json` | the app's settings |
 | `%APPDATA%\org.graphene.node-gui\gui.log` | what the app did at Windows shutdowns |
