@@ -43,8 +43,6 @@ start may bring up a warning. With SmartScreen on, it is "Windows protected your
 Otherwise it is "Open File - Security Warning" with "Unknown Publisher": click **Run**, after
 clearing "Always ask before opening this file" if you do not want to see it again.
 
-![Open File - Security Warning: Run](images/windows-gui/10-security-warning.png)
-
 **Firewall.** The node listens for other nodes, so Windows may ask whether to allow it on the network. Allow it on
 private networks. Outgoing connections, which the node needs to sync, work either way.
 

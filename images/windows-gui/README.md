@@ -13,7 +13,6 @@ Screenshots for [README-windows-gui.md](../../README-windows-gui.md). Each is li
 | `09-file-properties.png` | the "Details" tab of `witness_node.exe`'s properties |
 | `10-smartscreen.png` | SmartScreen's "Windows protected your PC" on the first start of the downloaded app |
 | `10-smartscreen-run.png` | the same after **More info**, with **Run anyway** |
-| `10-security-warning.png` | "Open File - Security Warning" on the first start of the downloaded app |
 | `11-firewall.png` | Windows Defender Firewall asking about `witness_node.exe` |
 
 PNG, the window at its normal size; crop to the window or dialog.
