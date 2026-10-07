@@ -33,8 +33,12 @@ The window uses Microsoft Edge WebView2, which comes with Windows 10 and 11.
 
 Start `graphene-node-gui.exe`.
 
-**SmartScreen.** The programs are not signed, so the first start may bring up "Windows protected your PC". Click
-**More info**, then **Run anyway**.
+**Security warning.** The programs are not signed, and Windows marks files downloaded from the internet, so the first
+start may bring up a warning. With SmartScreen on, it is "Windows protected your PC": click **More info**, then
+**Run anyway**. Otherwise it is "Open File - Security Warning" with "Unknown Publisher": click **Run**, after
+clearing "Always ask before opening this file" if you do not want to see it again.
+
+![Open File - Security Warning: Run](images/windows-gui/10-security-warning.png)
 
 **Firewall.** The node listens for other nodes, so Windows may ask whether to allow it on the network. Allow it on
 private networks. Outgoing connections, which the node needs to sync, work either way.
