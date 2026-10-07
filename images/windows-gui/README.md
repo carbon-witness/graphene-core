@@ -15,4 +15,6 @@ Screenshots for [README-windows-gui.md](../../README-windows-gui.md). Each is li
 | `10-smartscreen-run.png` | the same after **More info**, with **Run anyway** |
 | `11-firewall.png` | Windows Defender Firewall asking about `witness_node.exe` |
 
-PNG, the window at its normal size; crop to the window or dialog.
+PNG, the window at its normal size; crop to the window or dialog. Each has a 1px #d0d7de border, as GitHub draws
+its own boxes, so a white window does not merge into the page:
+`convert shot.png -bordercolor "#d0d7de" -border 1 NN-name.png`.
