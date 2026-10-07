@@ -206,7 +206,7 @@ To report a problem, attach:
 | `witness_node_data_dir\graphene-node-gui-api.json` | the node's API permissions the app writes: the default anonymous access plus an account for the app that may use the network API, which gives the seed and peer lists; written only when `config.ini` sets no `api-access` of its own |
 | `%APPDATA%\org.graphene.node-gui\settings.json` | the app's settings |
 | `%APPDATA%\org.graphene.node-gui\gui.log` | what the app did at Windows shutdowns |
-| `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, `Graphene Node` | "Start with Windows", when it is on |
+| `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, `Graphene Node` | the registry entry Windows uses to start the app in the tray at logon; added when "Start with Windows" is turned on, removed when it is turned off |
 
 ## Building
 
