@@ -37,7 +37,8 @@ Start `graphene-node-gui.exe`.
 start may bring up a warning. With SmartScreen on, it is "Windows protected your PC": click **More info**, then
 **Run anyway**.
 
-![SmartScreen: More info, then Run anyway](images/windows-gui/10-smartscreen.png)
+![SmartScreen: More info](images/windows-gui/10-smartscreen.png)
+![SmartScreen: Run anyway](images/windows-gui/10-smartscreen-run.png)
 
 Otherwise it is "Open File - Security Warning" with "Unknown Publisher": click **Run**, after
 clearing "Always ask before opening this file" if you do not want to see it again.
