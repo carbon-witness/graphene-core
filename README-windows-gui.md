@@ -210,6 +210,20 @@ To report a problem, attach:
 
 ## Building
 
-Both programs are cross-built on Linux: `witness_node.exe` with MinGW-w64, see
-[contrib/win64/README.md](contrib/win64/README.md); Graphene Node with Rust and Tauri, see
-[gui/README.md](gui/README.md). The `windows` workflow builds both and packages the zip on every push.
+The zip from the release is ready to run; this section is for building the programs from source.
+
+Both programs are cross-built on Linux (checked on Ubuntu); Windows is not needed for the build.
+
+* **`witness_node.exe`** is built with MinGW-w64 into one static executable that needs only DLLs that ship with
+  Windows. `contrib/win64/build-deps.sh` first builds the dependencies once (Boost 1.90, OpenSSL 3.5, zlib, curl;
+  about 30 minutes), then `contrib/win64/build.sh` builds the node. Wine only runs the build's own helper programs.
+  See [contrib/win64/README.md](contrib/win64/README.md).
+* **Graphene Node** (`graphene-node-gui.exe`) is written in Rust with Tauri 2 and built with
+  `cargo build --release --target x86_64-pc-windows-gnu` in `gui/`. `WebView2Loader.dll` goes into the zip next to
+  it. The app's tests run under Wine. See [gui/README.md](gui/README.md).
+* **The zip** `graphene-node-win64-<version>.zip` is made by the `windows` workflow on GitHub: on every push and pull
+  request it builds both programs, runs the tests, checks that `witness_node.exe --version` starts under Wine and
+  keeps the zip as an artifact. A release tag `graphene-X.Y.Z` attaches it to the release.
+
+The build commands and how the cross-build works are in the
+[1.2.1 release notes](RELEASE_NOTES_1.2.1.md#windows-build).
