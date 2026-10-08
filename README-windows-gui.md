@@ -12,7 +12,7 @@ Graphene runs on 64-bit Windows 10 and 11 as two programs:
 ## Getting it
 
 Download `graphene-node-win64-<version>.zip` from the
-[latest release](https://github.com/carbon-witness/graphene-core/releases/latest) and unpack it into a folder of its
+[latest release](https://github.com/graphene-blockchain/graphene-core/releases/latest) and unpack it into a folder of its
 own, for example `C:\Graphene`. The zip holds:
 
 | File | What it is |

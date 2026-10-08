@@ -1,7 +1,7 @@
 # graphene-core 1.2.1
 
-**Date:** October 7, 2026
-**Branch:** `graphene` ([carbon-witness/graphene-core](https://github.com/carbon-witness/graphene-core/tree/graphene))
+**Date:** October 2026
+**Branch:** `graphene` ([graphene-blockchain/graphene-core](https://github.com/graphene-blockchain/graphene-core/tree/graphene))
 **Tag:** `graphene-1.2.1`
 **Previous version:** 1.2.0 — tag `graphene-1.2.0` (September 27, 2026), [release notes](RELEASE_NOTES_1.2.0.md)
 
@@ -28,6 +28,21 @@ The file log now carries the level of each line.
 
 Consensus rules, block format and serialization are unchanged.
 
+## Changes visible on Linux
+
+Most of 1.2.1 is the Windows node and app; on Linux the node is 1.2.0 with the fixes below. Operators will notice:
+
+- **Lock on the data directory.** The node holds `<data dir>/witness_node.lock` (`flock`) while it runs. A second
+  node on the same directory prints the PID of the first and exits with **code 3**; a service manager that restarts
+  on failure keeps retrying until the first node stops. See "One node per data directory".
+- **Level in log lines.** Lines of the file log carry the level before the `]` (`main info  ] ...`). Tools that parse
+  the log by column position need updating; searches for `] message` still match. See "Log format".
+- **Version in the P2P user agent.** The node announces itself as `Graphene Reference Implementation <build>`, e.g.
+  `... 1.2.1-<commit>`, so peers can tell releases apart. See "P2P user agent with the build string".
+
+Also on Linux, without a change in behaviour to adapt to: the shutdown and websocket fixes, private keys kept out of
+the log, and a log line for each shutdown step.
+
 ## Getting the node
 
 ### Windows
@@ -46,8 +61,8 @@ The node is unchanged from 1.2.0 apart from the fixes below; see [README.md](REA
 [README-docker.md](README-docker.md).
 
 ```
-docker pull carbonwitness/graphene-core:1.2.1
-docker pull ghcr.io/carbon-witness/graphene-core:1.2.1
+docker pull grapheneblockchain/graphene-core:1.2.1
+docker pull ghcr.io/graphene-blockchain/graphene-core:1.2.1
 ```
 
 ## Windows build
@@ -65,7 +80,7 @@ contrib/win64/build.sh ~/win64-deps build-win64   # -> build-win64/programs/witn
 - **Dependencies:** `build-deps.sh` clones them at fixed tags and installs them as static libraries.
 - **Build helpers:** the build runs its own helpers (`cat-parts`, `embed_genesis`). Wine runs them as the CMake
   cross-compiling emulator through `wine-run.sh`, which rewrites `/abs/path` arguments to `Z:/abs/path`.
-- **fc fixes needed by MinGW** (graphene-fc `ac00004`):
+- **fc fixes needed by MinGW** (graphene-fc `cbf1c53`):
   - a missing Boost.PP include in `reflect.hpp`;
   - the reserved size of the Win64 `tcp_socket` implementation (208 bytes with Boost 1.90, 168 reserved);
   - `_WIN32_WINNT` raised to Windows 10, for `WaitOnAddress` in Boost.Atomic.
@@ -101,26 +116,26 @@ Two Windows-only options cover this:
 
 Both take the same exit path as SIGINT. The event and the process are opened before startup, so a wrong name or
 PID fails at once instead of leaving a node nobody can stop.
-Commit: graphene-core `265d67ca`.
+Commit: graphene-core `4dd407e9`.
 
 ### Closing the console window
 Closing the console window killed the node after the system's grace period, and the next start replayed blocks.
 `CTRL_CLOSE_EVENT` and `CTRL_BREAK_EVENT` now take the clean exit path. The handler blocks until the node has shut
 down, because Windows ends the process as soon as the handler returns.
-Commit: graphene-core `30f5cab6`.
+Commit: graphene-core `3684598b`.
 
 ### The process ends right after "Shutdown: done"
 On a real Windows machine, the node logged `Shutdown: done, exiting the process` with the database closed, but the
 process stayed. It hung in the runtime's static destructors and thread joins, on network threads with live peers.
 Everything that needs a clean close is closed at that point, so on Windows the node now flushes its output and calls
 `_exit` there.
-Commit: graphene-core `e24ffd7`.
+Commit: graphene-core `c851cef1`.
 
 ### Ended last at a Windows shutdown
 The node now asks Windows to end it last: `SetProcessShutdownParameters(0x100)`, the lowest level open to
 applications. The GUI asks to be notified first and has time to stop the node (see "Windows shutdown, restart and
 logoff" under the GUI below).
-Commit: graphene-core `d9f066a`.
+Commit: graphene-core `6f425378`.
 
 ### Startup errors stay readable after a double-click
 Started from Explorer, the node gets a console of its own, which closes with the process. A startup error (data
@@ -130,7 +145,7 @@ Enter, but only when the console belongs to it alone:
 - not when started from `cmd` or PowerShell, where the console stays open anyway;
 - not when started from the GUI, which shows no console.
 
-Commit: graphene-core `5da5c17`.
+Commit: graphene-core `3d0be4e0`.
 
 ## Graphene Node (GUI)
 
@@ -143,11 +158,11 @@ Both executables carry a Windows version resource, shown on the "Details" tab of
 | | `witness_node.exe` | `graphene-node-gui.exe` |
 |---|---|---|
 | File version | 1.2.1 | 1.0.0 |
-| Product version | the build string, e.g. `1.2.1-d80c6afe` | 1.0.0 |
+| Product version | the build string, `1.2.1-<commit>` | 1.0.0 |
 | Description | Graphene witness node | Graphene Node |
 
 The node's resource is generated by CMake from `GRAPHENE_VERSION` and the commit, like `--version`. The bottom of
-the app's Settings page shows both: "Graphene Node 1.0.0 · witness_node 1.2.1-d80c6afe".
+the app's Settings page shows both: "Graphene Node 1.0.0 · witness_node 1.2.1-<commit>".
 
 ### The node as its own process
 - **Separate from the app.** Closing the app, or the app crashing, leaves the node running. The next start of the app
@@ -181,9 +196,10 @@ the app's Settings page shows both: "Graphene Node 1.0.0 · witness_node 1.2.1-d
   anonymous access unchanged plus an account for the app (a random password per node start, kept in
   `graphene-node-gui.lock`), and starts the node with `--api-access`.
 - **Peer release and build.** From 1.2.1 on, the node's P2P user agent carries its build string (see below).
-  Older releases send no version; the app recognises 1.0, 1.1, the 1.1 carbon build (fc `a108c380`), 1.2.0 and the 1.2.0 carbon build (`d5a98f9a`)
+  Older releases send no version; the app recognises 1.0, 1.1 and 1.2.0, and the 1.1 and 1.2.0 builds of the carbon-witness fork
+  (fc `a108c380`, graphene-core `d5a98f9a`)
   by the commit time of the fc library they report and shows the commit of their release tag as the build
-  (for the carbon build, its fc commit); other builds get a "?".
+  (for the fork's 1.1 build, its fc commit); other builds get a "?".
 - **No blocks from the network.** Behind and without a new block for 90 s, the status says so. With no peers it
   points at unreachable seed nodes and a firewall; with peers it shows how many are connected.
 - **Actions:** start, stop and restart, as buttons of one width with player glyphs. While stopping, the status shows
@@ -253,7 +269,7 @@ during sync.
   up to 30 s.
 
 Verified: 0 of 14 crashes with the change.
-Commit: graphene-core `e9cb629`.
+Commit: graphene-core `2a7ec408`.
 
 ### Websocket server shutdown hung or used a destroyed server
 Two defects in the websocket server's destructor broke the node's shutdown when clients connected while it stopped:
@@ -267,11 +283,11 @@ Two defects in the websocket server's destructor broke the node's shutdown when 
   return once the server is gone.
 
 Verified: 16 of 16 stops under a connection storm exited cleanly.
-Commit: graphene-fc `f592269`.
+Commit: graphene-fc `10e902f`.
 
 The node also logs each shutdown step (`Shutdown: stopping plugins`, `closing the P2P network`, `closing the chain
 database`, …), so a slow stop shows where it waits.
-Commit: graphene-core `3bc569e`.
+Commit: graphene-core `d47e1193`.
 
 ### Private keys in the log
 A malformed `private-key` entry put the private key into the exception text, and so into the log, in three cases:
@@ -281,7 +297,7 @@ A malformed `private-key` entry put the private key into the exception text, and
 - a JSON error carried the whole entry.
 
 Any failure while parsing the entry is now replaced with an error that names at most the public key.
-Commit: graphene-core `bf3be87`.
+Commit: graphene-core `d54fe838`.
 
 ### One node per data directory
 Nothing stopped two nodes from opening one data directory and corrupting its database. This could happen with:
@@ -300,12 +316,12 @@ Stop it first: two nodes on one data directory corrupt its database.
 ```
 
 The lock is released with the process, even after a crash or `kill -9`, so there is never a stale lock file to remove.
-Commit: graphene-core `434a654`.
+Commit: graphene-core `e8a0198e`.
 
 ## P2P user agent with the build string
 
 The P2P hello message carries no version, so peers could not tell releases apart. The node's user agent is now
-`Graphene Reference Implementation <build>`, e.g. `Graphene Reference Implementation 1.2.1-286e080c`. The hello
+`Graphene Reference Implementation <build>`, e.g. `Graphene Reference Implementation 1.2.1-<commit>`. The hello
 message itself is unchanged.
 
 ## Log format
@@ -317,7 +333,7 @@ File appender lines now carry the level before the `]`:
 ```
 
 Searches for `] message` still match.
-Commit: graphene-fc `9706c96`.
+Commit: graphene-fc `5618f5c`.
 
 ## License
 
@@ -348,73 +364,105 @@ earlier contributors, which the MIT license requires to stay. The Windows zip no
 
 | Repository | Branch | Commit |
 |---|---|---|
-| [carbon-witness/graphene-core](https://github.com/carbon-witness/graphene-core/tree/graphene) | `graphene` | `graphene-1.2.1` |
-| [carbon-witness/graphene-fc](https://github.com/carbon-witness/graphene-fc/tree/graphene) | `graphene` | `f592269` |
-| [carbon-witness/websocketpp](https://github.com/carbon-witness/websocketpp/tree/graphene) | `graphene` | `571a7b0` |
-| [carbon-witness/editline](https://github.com/carbon-witness/editline/tree/graphene) | `graphene` | `224e256` |
-| [carbon-witness/secp256k1-zkp](https://github.com/carbon-witness/secp256k1-zkp/tree/graphene) | `graphene` | `bd06794` |
+| [graphene-blockchain/graphene-core](https://github.com/graphene-blockchain/graphene-core/tree/graphene) | `graphene` | `graphene-1.2.1` |
+| [graphene-blockchain/graphene-fc](https://github.com/graphene-blockchain/graphene-fc/tree/graphene) | `graphene` | `cf2d930` |
+| [graphene-blockchain/websocketpp](https://github.com/graphene-blockchain/websocketpp/tree/fc) | `fc` | `571a7b0` |
+| [graphene-blockchain/editline](https://github.com/graphene-blockchain/editline/tree/graphene) | `graphene` | `224e256` |
+| [graphene-blockchain/secp256k1-zkp](https://github.com/graphene-blockchain/secp256k1-zkp/tree/graphene) | `graphene` | `bd06794` |
 
 websocketpp, editline and secp256k1-zkp are unchanged since 1.2.0.
 
 ## Commits
 
-**graphene-core**
-- [`265d67ca`](https://github.com/carbon-witness/graphene-core/commit/265d67ca49d8bd80dfd8e62fc592802f441e4933) witness_node: add --shutdown-event and --parent-pid on Windows
-- [`f9fbd272`](https://github.com/carbon-witness/graphene-core/commit/f9fbd272a7e8ddcbdda4e1c2145dca66e4125793) contrib/win64: cross-build witness_node.exe with MinGW-w64
-- [`deafaf2e`](https://github.com/carbon-witness/graphene-core/commit/deafaf2e47cd94f80e4a8264e2c36132e1a2e0f8) contrib/win64: add the MinGW-w64 toolchain file
-- [`96b9a3f8`](https://github.com/carbon-witness/graphene-core/commit/96b9a3f8a8b3484b2fa7546071e1a089aa40a5fd) contrib/win64: keep the fc fixes as a patch
-- [`0db8e60a`](https://github.com/carbon-witness/graphene-core/commit/0db8e60a5ea171f5f6261b13b5efeb44f7f9e327) fc: build with MinGW-w64 for 64-bit Windows
-- [`30f5cabe`](https://github.com/carbon-witness/graphene-core/commit/30f5cabe53ef43c3359a22550ccff0a8af400825) witness_node: exit cleanly when the console window is closed on Windows
-- [`e9cb6290`](https://github.com/carbon-witness/graphene-core/commit/e9cb6290896a1c3d0f7a4499bd8bc66a151f4f6f) app: refuse P2P blocks during shutdown and let applied ones finish
-- [`bf3be87c`](https://github.com/carbon-witness/graphene-core/commit/bf3be87c2740f44d1cee5c79aacf6b74c4c903ab) witness: keep private keys out of private-key parse errors
-- [`e67fa481`](https://github.com/carbon-witness/graphene-core/commit/e67fa481ca9cf80f666c090b364aab985cba9924) gui: tray supervisor and dashboard for witness_node on Windows
-- [`8eabcc73`](https://github.com/carbon-witness/graphene-core/commit/8eabcc737c84237d97015a1a16ea4b833dcca7a0) gui: languages, Linux-coloured journal, close dialog, second-node guard
-- [`3bc569e5`](https://github.com/carbon-witness/graphene-core/commit/3bc569e56d89d462bf73bd9201874510c594abae) Stop the node quickly from the GUI; log each shutdown step
-- [`8cfd0956`](https://github.com/carbon-witness/graphene-core/commit/8cfd095617fd3c9de9928fe7ef1ed0e109ec4c87) gui: node and data paths follow the app's folder
-- [`97a33742`](https://github.com/carbon-witness/graphene-core/commit/97a33742d6f0ee71b3dea4f6022cc5a6e1b53472) gui: an error box with OK when the node cannot start
-- [`f7c6755c`](https://github.com/carbon-witness/graphene-core/commit/f7c6755c8aea4279fbcdeccaf1cef3cf94f5d0e1) gui: check for a conflicting node before the window opens
-- [`434a6541`](https://github.com/carbon-witness/graphene-core/commit/434a654163d911ea8e05e9ef8b81f3ba352d2e34) witness_node: refuse to start on a data directory another node is using
-- [`90d7c2b9`](https://github.com/carbon-witness/graphene-core/commit/90d7c2b97542c5fb1b15131833097985c5b4283d) gui: a node refused for a data folder in use is not a crash
-- [`5da5c17c`](https://github.com/carbon-witness/graphene-core/commit/5da5c17c471cc6578f7c863d59a89daf62951220) witness_node: keep the window open on a startup error after a double-click
-- [`9769c15b`](https://github.com/carbon-witness/graphene-core/commit/9769c15b71b1c30a1814d56972753c286e16b419) gui: graphene-node-gui.exe, player glyphs, start with Windows
-- [`e24ffd79`](https://github.com/carbon-witness/graphene-core/commit/e24ffd79fb63b27212dfca76db5ee70a12d74b38) witness_node: end the process right after a clean shutdown on Windows
-- [`65d9659e`](https://github.com/carbon-witness/graphene-core/commit/65d9659e249940f7c651217f34d06a61b87f3420) gui: end a node that logged its shutdown but did not exit
-- [`f09c18b4`](https://github.com/carbon-witness/graphene-core/commit/f09c18b4fc11e1b4422a3471bba5467804fa82db) gui: larger tray glyphs; a plain yellow disc while starting or syncing
-- [`4e889b31`](https://github.com/carbon-witness/graphene-core/commit/4e889b31e6f55dcc2cbf99c37a7867dca94e57d4) gui: restart glyph during a restart; the window shows the tray's glyph
-- [`7ae59024`](https://github.com/carbon-witness/graphene-core/commit/7ae5902453cd542b18de0fde2b8be858a510a56f) gui: the syncing glyph is a yellow dot inside the white circle
-- [`5749bcdf`](https://github.com/carbon-witness/graphene-core/commit/5749bcdfd197411711b4cec90ba10e0234d0c705) gui: remove the tray icon before the app exits
-- [`e6cfb6d6`](https://github.com/carbon-witness/graphene-core/commit/e6cfb6d60b6dcbd80c3e543890c3ea54a9efc19f) gui: bound the journal's blocks table like the raw feed
-- [`948743d0`](https://github.com/carbon-witness/graphene-core/commit/948743d0a691d5d3bf3091786eb8c5157882f648) gui: stop the node cleanly when Windows shuts down, restarts or logs off
-- [`d9f066a8`](https://github.com/carbon-witness/graphene-core/commit/d9f066a856e4d20584944c7c500bebd017a967c0) witness_node: ask Windows to end the node last at shutdown
-- [`0549560a`](https://github.com/carbon-witness/graphene-core/commit/0549560aea9a8ba9014d6e9a6f97bd5e4eaf5902) gui: stop the node on WM_QUERYENDSESSION; log the session end
-- [`40801f47`](https://github.com/carbon-witness/graphene-core/commit/40801f4760e571d10be01a0bc36e7a3d9a0b154a) gui: update the tray tooltip and menu only when they change
-- [`a0f241dc`](https://github.com/carbon-witness/graphene-core/commit/a0f241dcc10a653fb5444a6b1b5a3071f996137c) docs: release notes for 1.2.1
-- [`141fbe84`](https://github.com/carbon-witness/graphene-core/commit/141fbe84daa87ae7fd1d13f1b2ed009509da206e) version: 1.2.1
-- [`beb85c68`](https://github.com/carbon-witness/graphene-core/commit/beb85c680f78172f251debdce67e22442e52f508) ci: cross-build the Windows package
-- [`31cce138`](https://github.com/carbon-witness/graphene-core/commit/31cce138fcc2de01c712fc915f0e02b8c93303a7) ci: save the Windows build caches even when a later step fails
-- [`d38074a3`](https://github.com/carbon-witness/graphene-core/commit/d38074a3458df0831d07745e61c9a964c6ffa19d) gui: Peers tab; 0 % for a fresh node; say when no blocks arrive
-- [`286e080c`](https://github.com/carbon-witness/graphene-core/commit/286e080cd639b729e718c0abffd97c3517b4637b) gui: the peers table is as tall as its rows
-- [`d80c6afe`](https://github.com/carbon-witness/graphene-core/commit/d80c6afedf91270e126cba002ee43cb122243db5) Show each peer's release: build string in the user agent, Version column
-- [`9827b115`](https://github.com/carbon-witness/graphene-core/commit/9827b1154466a1eaaf4d0d681ce830dbd4004eba) gui: Seeds and Peers tab; seeds added to config.ini; Build column
-- [`d6149ef9`](https://github.com/carbon-witness/graphene-core/commit/d6149ef9ba34b11f4f7e4f0ebc8af235b3c576a6) gui: show why a seed failed, not just "unspecified"; seed form in one row
-- [`8f5f6a6d`](https://github.com/carbon-witness/graphene-core/commit/8f5f6a6d9320416f997f2b7efdea4f338945a5f8) gui: the seeds table's header no longer floats over the peers table
-- [`ff7fea71`](https://github.com/carbon-witness/graphene-core/commit/ff7fea710850a536adbee60e266b4dfbf018be4d) gui: split a stalled handshake into columns in the seeds table
-- [`3f96c8d3`](https://github.com/carbon-witness/graphene-core/commit/3f96c8d3e4f4c2bd97aaceb51c9aa10ece38a53b) gui: a seed in the middle of its handshake is not a failed one
-- [`8df4f189`](https://github.com/carbon-witness/graphene-core/commit/8df4f189bd99298935193f78979db8002ad8755d) gui: seeds table ends at Last attempt for now
-- [`1dbd49c7`](https://github.com/carbon-witness/graphene-core/commit/1dbd49c74846a9644f6d1df08b62083dbac851c5) gui: recognise the 1.1 carbon build (fc a108c380)
-- [`435e8c5f`](https://github.com/carbon-witness/graphene-core/commit/435e8c5f35aa6ea8cd22c59c88dae5f070f73edb) docs: the 1.1 carbon build in the 1.2.1 notes
-- [`47885942`](https://github.com/carbon-witness/graphene-core/commit/478859422927255115d2da8170e4660e52753d1d) gui: fewer false "API has not answered" alerts
-- [`169eed6e`](https://github.com/carbon-witness/graphene-core/commit/169eed6ee42bc39deb9cb7407a56044cc884df66) gui: show d5a98f9a as the 1.2.0 carbon build
-- [`116d9710`](https://github.com/carbon-witness/graphene-core/commit/116d9710c4a13cafa519047b3a82ef67b3578d8c) gui: days in full; estimated time to sync
-- [`4d74cee4`](https://github.com/carbon-witness/graphene-core/commit/4d74cee48a29a5d1a5cb81013fae1437f583cb26) gui: the "API has not answered" alert only on the Seeds and Peers tab
-- [`79abf5cb`](https://github.com/carbon-witness/graphene-core/commit/79abf5cb5969ad4a479f6fd645ad94534a300b05) Windows version resources: witness_node 1.2.1, Graphene Node 1.0.0
-- [`3e1e4f3e`](https://github.com/carbon-witness/graphene-core/commit/3e1e4f3eb3a3dccb3f44f153f9fdb105f0b3d98f) witness_node: Graphene contributors in the version resource's copyright
-- [`480f4ca9`](https://github.com/carbon-witness/graphene-core/commit/480f4ca95ed6f017ae58eb181eb49b795187ed86) LICENSE: add the Graphene contributors; ship LICENSE.txt in the Windows zip
-- [`b7759766`](https://github.com/carbon-witness/graphene-core/commit/b7759766935a7dc05fb3fa80a8812caa1e97b91e) docs: wording of the Windows zip contents
-- [`5d9e91be`](https://github.com/carbon-witness/graphene-core/commit/5d9e91bed3ade633c9093312c3ddd2b633bbdbde) docs: list every commit of the branch in the 1.2.1 notes
-- [`75360026`](https://github.com/carbon-witness/graphene-core/commit/753600266d3caf429cfd254260af53c284b51d90) ci: a failed upload to the build cache no longer fails the Docker build
+The tag `graphene-1.2.1` is on the merge commit of the documentation PR; the lists below are the commits of each PR.
 
-**graphene-fc**
-- [`ac00004`](https://github.com/carbon-witness/graphene-fc/commit/ac00004908f44669c89b578b56d4af808f7caff0) Build with MinGW-w64 for 64-bit Windows
-- [`9706c96`](https://github.com/carbon-witness/graphene-fc/commit/9706c96e8a6bb1533e46979dc45b2a06b3eb0cde) log: write the level into file appender lines
-- [`f592269`](https://github.com/carbon-witness/graphene-fc/commit/f592269d033147fa1544f23ff658361f58ee4704) websocket: a server shutdown no longer hangs or touches a destroyed server
+**graphene-fc** ([#3](https://github.com/graphene-blockchain/graphene-fc/pull/3))
+- [`cbf1c53`](https://github.com/graphene-blockchain/graphene-fc/commit/cbf1c53) Build with MinGW-w64 for 64-bit Windows
+- [`5618f5c`](https://github.com/graphene-blockchain/graphene-fc/commit/5618f5c) log: write the level into file appender lines
+- [`10e902f`](https://github.com/graphene-blockchain/graphene-fc/commit/10e902f) websocket: a server shutdown no longer hangs or touches a destroyed server
+
+**graphene-core: node** ([#11](https://github.com/graphene-blockchain/graphene-core/pull/11))
+- [`495f407f`](https://github.com/graphene-blockchain/graphene-core/commit/495f407f) fc: bump to graphene-fc cf2d930 (MinGW-w64 build, file log levels, websocket shutdown fixes)
+- [`4dd407e9`](https://github.com/graphene-blockchain/graphene-core/commit/4dd407e9) witness_node: add --shutdown-event and --parent-pid on Windows
+- [`3684598b`](https://github.com/graphene-blockchain/graphene-core/commit/3684598b) witness_node: exit cleanly when the console window is closed on Windows
+- [`2a7ec408`](https://github.com/graphene-blockchain/graphene-core/commit/2a7ec408) app: refuse P2P blocks during shutdown and let applied ones finish
+- [`d54fe838`](https://github.com/graphene-blockchain/graphene-core/commit/d54fe838) witness: keep private keys out of private-key parse errors
+- [`d47e1193`](https://github.com/graphene-blockchain/graphene-core/commit/d47e1193) Stop the node quickly from the GUI; log each shutdown step
+- [`e8a0198e`](https://github.com/graphene-blockchain/graphene-core/commit/e8a0198e) witness_node: refuse to start on a data directory another node is using
+- [`3d0be4e0`](https://github.com/graphene-blockchain/graphene-core/commit/3d0be4e0) witness_node: keep the window open on a startup error after a double-click
+- [`c851cef1`](https://github.com/graphene-blockchain/graphene-core/commit/c851cef1) witness_node: end the process right after a clean shutdown on Windows
+- [`6f425378`](https://github.com/graphene-blockchain/graphene-core/commit/6f425378) witness_node: ask Windows to end the node last at shutdown
+- [`c3efe5c4`](https://github.com/graphene-blockchain/graphene-core/commit/c3efe5c4) version: 1.2.1
+- [`1135557d`](https://github.com/graphene-blockchain/graphene-core/commit/1135557d) Show each peer's release: build string in the user agent, Version column
+- [`f4d475e7`](https://github.com/graphene-blockchain/graphene-core/commit/f4d475e7) Windows version resources: witness_node 1.2.1, Graphene Node 1.0.0
+- [`b3047a3e`](https://github.com/graphene-blockchain/graphene-core/commit/b3047a3e) witness_node: Graphene contributors in the version resource's copyright
+
+**graphene-core: Windows build, app and CI** ([#12](https://github.com/graphene-blockchain/graphene-core/pull/12))
+- [`e1ca38d9`](https://github.com/graphene-blockchain/graphene-core/commit/e1ca38d9) contrib/win64: cross-build witness_node.exe with MinGW-w64
+- [`04d753b4`](https://github.com/graphene-blockchain/graphene-core/commit/04d753b4) contrib/win64: add the MinGW-w64 toolchain file
+- [`50e2b4db`](https://github.com/graphene-blockchain/graphene-core/commit/50e2b4db) contrib/win64: keep the fc fixes as a patch
+- [`92165ec0`](https://github.com/graphene-blockchain/graphene-core/commit/92165ec0) fc: build with MinGW-w64 for 64-bit Windows
+- [`a04b003e`](https://github.com/graphene-blockchain/graphene-core/commit/a04b003e) gui: tray supervisor and dashboard for witness_node on Windows
+- [`6061a9ce`](https://github.com/graphene-blockchain/graphene-core/commit/6061a9ce) gui: languages, Linux-coloured journal, close dialog, second-node guard
+- [`db50f514`](https://github.com/graphene-blockchain/graphene-core/commit/db50f514) Stop the node quickly from the GUI; log each shutdown step
+- [`21cc6baf`](https://github.com/graphene-blockchain/graphene-core/commit/21cc6baf) gui: node and data paths follow the app's folder
+- [`f3614c2f`](https://github.com/graphene-blockchain/graphene-core/commit/f3614c2f) gui: an error box with OK when the node cannot start
+- [`5c96ed46`](https://github.com/graphene-blockchain/graphene-core/commit/5c96ed46) gui: check for a conflicting node before the window opens
+- [`338f665a`](https://github.com/graphene-blockchain/graphene-core/commit/338f665a) gui: a node refused for a data folder in use is not a crash
+- [`eb9924c1`](https://github.com/graphene-blockchain/graphene-core/commit/eb9924c1) gui: graphene-node-gui.exe, player glyphs, start with Windows
+- [`b2b2f2c0`](https://github.com/graphene-blockchain/graphene-core/commit/b2b2f2c0) gui: end a node that logged its shutdown but did not exit
+- [`8b5f4b01`](https://github.com/graphene-blockchain/graphene-core/commit/8b5f4b01) gui: larger tray glyphs; a plain yellow disc while starting or syncing
+- [`81a4b980`](https://github.com/graphene-blockchain/graphene-core/commit/81a4b980) gui: restart glyph during a restart; the window shows the tray's glyph
+- [`eee09632`](https://github.com/graphene-blockchain/graphene-core/commit/eee09632) gui: the syncing glyph is a yellow dot inside the white circle
+- [`8a6a7923`](https://github.com/graphene-blockchain/graphene-core/commit/8a6a7923) gui: remove the tray icon before the app exits
+- [`972292a2`](https://github.com/graphene-blockchain/graphene-core/commit/972292a2) gui: bound the journal's blocks table like the raw feed
+- [`962ceb9b`](https://github.com/graphene-blockchain/graphene-core/commit/962ceb9b) gui: stop the node cleanly when Windows shuts down, restarts or logs off
+- [`50cef979`](https://github.com/graphene-blockchain/graphene-core/commit/50cef979) gui: stop the node on WM_QUERYENDSESSION; log the session end
+- [`c8f2c35c`](https://github.com/graphene-blockchain/graphene-core/commit/c8f2c35c) gui: update the tray tooltip and menu only when they change
+- [`5fb8dbf2`](https://github.com/graphene-blockchain/graphene-core/commit/5fb8dbf2) ci: cross-build the Windows package
+- [`09e39c0d`](https://github.com/graphene-blockchain/graphene-core/commit/09e39c0d) ci: save the Windows build caches even when a later step fails
+- [`c38d6f3c`](https://github.com/graphene-blockchain/graphene-core/commit/c38d6f3c) gui: Peers tab; 0 % for a fresh node; say when no blocks arrive
+- [`b66c48dc`](https://github.com/graphene-blockchain/graphene-core/commit/b66c48dc) gui: the peers table is as tall as its rows
+- [`6aae5042`](https://github.com/graphene-blockchain/graphene-core/commit/6aae5042) Show each peer's release: build string in the user agent, Version column
+- [`356bb2ba`](https://github.com/graphene-blockchain/graphene-core/commit/356bb2ba) gui: Seeds and Peers tab; seeds added to config.ini; Build column
+- [`0fd7f542`](https://github.com/graphene-blockchain/graphene-core/commit/0fd7f542) gui: show why a seed failed, not just "unspecified"; seed form in one row
+- [`93bce651`](https://github.com/graphene-blockchain/graphene-core/commit/93bce651) gui: the seeds table's header no longer floats over the peers table
+- [`0fa2820a`](https://github.com/graphene-blockchain/graphene-core/commit/0fa2820a) gui: split a stalled handshake into columns in the seeds table
+- [`f01046c5`](https://github.com/graphene-blockchain/graphene-core/commit/f01046c5) gui: a seed in the middle of its handshake is not a failed one
+- [`46adbe25`](https://github.com/graphene-blockchain/graphene-core/commit/46adbe25) gui: seeds table ends at Last attempt for now
+- [`f5c655ad`](https://github.com/graphene-blockchain/graphene-core/commit/f5c655ad) gui: recognise the 1.1 carbon build (fc a108c380)
+- [`0eef26f4`](https://github.com/graphene-blockchain/graphene-core/commit/0eef26f4) gui: fewer false "API has not answered" alerts
+- [`81637af1`](https://github.com/graphene-blockchain/graphene-core/commit/81637af1) gui: show d5a98f9a as the 1.2.0 carbon build
+- [`311737bd`](https://github.com/graphene-blockchain/graphene-core/commit/311737bd) gui: days in full; estimated time to sync
+- [`79973bab`](https://github.com/graphene-blockchain/graphene-core/commit/79973bab) gui: the "API has not answered" alert only on the Seeds and Peers tab
+- [`570bb251`](https://github.com/graphene-blockchain/graphene-core/commit/570bb251) Windows version resources: witness_node 1.2.1, Graphene Node 1.0.0
+- [`70de05d4`](https://github.com/graphene-blockchain/graphene-core/commit/70de05d4) LICENSE: add the Graphene contributors; ship LICENSE.txt in the Windows zip
+- [`5de1c6af`](https://github.com/graphene-blockchain/graphene-core/commit/5de1c6af) ci: a failed upload to the build cache no longer fails the Docker build
+- [`adf7d83d`](https://github.com/graphene-blockchain/graphene-core/commit/adf7d83d) ci: no Windows and Docker builds for pushes and pull requests that change only documentation
+
+**graphene-core: documentation** ([#13](https://github.com/graphene-blockchain/graphene-core/pull/13))
+- [`b6b1e067`](https://github.com/graphene-blockchain/graphene-core/commit/b6b1e067) docs: release notes for 1.2.1
+- [`02f55078`](https://github.com/graphene-blockchain/graphene-core/commit/02f55078) version: 1.2.1
+- [`5bafdf18`](https://github.com/graphene-blockchain/graphene-core/commit/5bafdf18) ci: cross-build the Windows package
+- [`93592960`](https://github.com/graphene-blockchain/graphene-core/commit/93592960) gui: Peers tab; 0 % for a fresh node; say when no blocks arrive
+- [`6b364d69`](https://github.com/graphene-blockchain/graphene-core/commit/6b364d69) Show each peer's release: build string in the user agent, Version column
+- [`2ebdf337`](https://github.com/graphene-blockchain/graphene-core/commit/2ebdf337) gui: Seeds and Peers tab; seeds added to config.ini; Build column
+- [`b0d87f29`](https://github.com/graphene-blockchain/graphene-core/commit/b0d87f29) docs: the 1.1 carbon build in the 1.2.1 notes
+- [`4317a0e0`](https://github.com/graphene-blockchain/graphene-core/commit/4317a0e0) gui: show d5a98f9a as the 1.2.0 carbon build
+- [`465bc6a5`](https://github.com/graphene-blockchain/graphene-core/commit/465bc6a5) Windows version resources: witness_node 1.2.1, Graphene Node 1.0.0
+- [`8a8e1aec`](https://github.com/graphene-blockchain/graphene-core/commit/8a8e1aec) LICENSE: add the Graphene contributors; ship LICENSE.txt in the Windows zip
+- [`ad89155b`](https://github.com/graphene-blockchain/graphene-core/commit/ad89155b) docs: wording of the Windows zip contents
+- [`8a055ecf`](https://github.com/graphene-blockchain/graphene-core/commit/8a055ecf) docs: list every commit of the branch in the 1.2.1 notes
+- [`9a3b9875`](https://github.com/graphene-blockchain/graphene-core/commit/9a3b9875) docs: 1.2.1 notes for the release: date, graphene branches, all commits
+- [`d304a8e7`](https://github.com/graphene-blockchain/graphene-core/commit/d304a8e7) docs: Graphene Node for Windows guide (README-windows-gui.md)
+- [`74695159`](https://github.com/graphene-blockchain/graphene-core/commit/74695159) docs: Windows GUI screenshots: folder, dashboard, journal, seeds and peers, firewall
+- [`5bfd54cf`](https://github.com/graphene-blockchain/graphene-core/commit/5bfd54cf) docs: Windows GUI settings screenshot; the path fields show their defaults
+- [`6b5b043d`](https://github.com/graphene-blockchain/graphene-core/commit/6b5b043d) docs: Windows GUI tray menu screenshot; all of the menu's items in the text
+- [`faf3aa62`](https://github.com/graphene-blockchain/graphene-core/commit/faf3aa62) docs: the last Windows GUI screenshots: synced dashboard, close dialog, file properties
+- [`2ba9712d`](https://github.com/graphene-blockchain/graphene-core/commit/2ba9712d) docs: Windows GUI security warning on the first start, with its screenshot
+- [`e4a8bd3f`](https://github.com/graphene-blockchain/graphene-core/commit/e4a8bd3f) docs: Windows GUI SmartScreen screenshot
+- [`4539c656`](https://github.com/graphene-blockchain/graphene-core/commit/4539c656) docs: Windows GUI SmartScreen screenshots, both steps
+- [`731de986`](https://github.com/graphene-blockchain/graphene-core/commit/731de986) docs: Windows GUI guide without the Open File security warning screenshot
+- [`0019a9d4`](https://github.com/graphene-blockchain/graphene-core/commit/0019a9d4) docs: a 1px border on the Windows GUI screenshots
+- [`61a1dc05`](https://github.com/graphene-blockchain/graphene-core/commit/61a1dc05) docs: tray icons in the Windows GUI guide's state table
+- [`bf62b56f`](https://github.com/graphene-blockchain/graphene-core/commit/bf62b56f) docs: connecting RuDEX to the local node, in the Windows GUI guide
