@@ -92,22 +92,35 @@ std::string witness_plugin::plugin_name()const
 
 void witness_plugin::add_private_key(const std::string& key_id_to_wif_pair_string)
 {
-   auto key_id_to_wif_pair = graphene::app::dejsonify<std::pair<chain::public_key_type, std::string>>
-         (key_id_to_wif_pair_string, 5);
-   fc::optional<fc::ecc::private_key> private_key = graphene::utilities::wif_to_key(key_id_to_wif_pair.second);
-   if (!private_key)
+   // The entry holds a private key, and exceptions end up in the log. fc's parse errors carry their input
+   // (a WIF given where the public key belongs fails in public_key_type with the WIF in the message), so
+   // they are replaced with errors that carry no part of the entry.
+   std::pair<chain::public_key_type, std::string> key_id_to_wif_pair;
+   try
    {
+      key_id_to_wif_pair = graphene::app::dejsonify<std::pair<chain::public_key_type, std::string>>
+            (key_id_to_wif_pair_string, 5);
+   }
+   catch (...)
+   {
+      FC_THROW("Invalid private-key entry, expected [\"<public key>\",\"<WIF private key>\"]");
+   }
+
+   fc::optional<fc::ecc::private_key> private_key;
+   try
+   {
+      private_key = graphene::utilities::wif_to_key(key_id_to_wif_pair.second);
       // the key isn't in WIF format; see if they are still passing the old native private key format.  This is
       // just here to ease the transition, can be removed soon
-      try
-      {
+      if (!private_key)
          private_key = fc::variant(key_id_to_wif_pair.second, 2).as<fc::ecc::private_key>(1);
-      }
-      catch (const fc::exception&)
-      {
-         FC_THROW("Invalid WIF-format private key ${key_string}", ("key_string", key_id_to_wif_pair.second));
-      }
    }
+   catch (...)
+   {
+      private_key.reset();
+   }
+   if (!private_key)
+      FC_THROW("Invalid WIF-format private key for public key ${public}", ("public", key_id_to_wif_pair.first));
 
    if (_private_keys.find(key_id_to_wif_pair.first) == _private_keys.end())
    {

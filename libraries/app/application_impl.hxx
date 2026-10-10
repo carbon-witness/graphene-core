@@ -197,7 +197,16 @@ class application_impl : public net::node_delegate
       std::map<string, std::shared_ptr<abstract_plugin>> _available_plugins;
 
       bool _is_finished_syncing = false;
+
+      /// Refuses blocks and transactions from now on. The P2P node queues them on this thread ahead of time
+      /// (during sync, many blocks at once), and they still run while shutdown waits for the P2P node to close.
+      void stop_network_items() { _shutting_down = true; }
+      /// Waits for blocks and transactions already being applied; call before closing the chain database
+      void wait_for_network_items();
    private:
+      struct network_item_guard;
+      bool _shutting_down = false;
+      uint32_t _network_items_in_flight = 0;
       fc::serial_valve valve;
    };
 

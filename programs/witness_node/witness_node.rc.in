@@ -1,0 +1,32 @@
+// Version resource of witness_node.exe on Windows: the "Details" tab of the file's properties.
+// Filled in by CMake from GRAPHENE_VERSION and the commit, like witness_node --version.
+#include <winver.h>
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     @WITNESS_NODE_VERSION_COMMAS@,0
+PRODUCTVERSION  @WITNESS_NODE_VERSION_COMMAS@,0
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName",      "Graphene"
+      VALUE "FileDescription",  "Graphene witness node"
+      VALUE "FileVersion",      "@GRAPHENE_VERSION@"
+      VALUE "InternalName",     "witness_node"
+      VALUE "LegalCopyright",   "Copyright (c) 2026 Graphene contributors. MIT License."
+      VALUE "OriginalFilename", "witness_node.exe"
+      VALUE "ProductName",      "Graphene"
+      VALUE "ProductVersion",   "@GRAPHENE_GIT_REVISION_DESCRIPTION@"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

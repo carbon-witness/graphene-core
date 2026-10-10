@@ -36,6 +36,7 @@
 #include <graphene/net/core_messages.hpp>
 #include <graphene/net/exceptions.hpp>
 
+#include <graphene/utilities/git_revision.hpp>
 #include <graphene/utilities/key_conversion.hpp>
 #include <graphene/chain/worker_evaluator.hpp>
 
@@ -117,7 +118,9 @@ namespace graphene { namespace app { namespace detail {
 
 void application_impl::reset_p2p_node(const fc::path& data_dir)
 { try {
-   _p2p_network = std::make_shared<net::node>("Graphene Reference Implementation");
+   // The build string ("1.2.1-286e0801") lets peers tell versions apart: the P2P hello carries no version
+   _p2p_network = std::make_shared<net::node>( std::string("Graphene Reference Implementation ")
+                                               + graphene::utilities::git_revision_description );
 
    _p2p_network->load_configuration(data_dir / "p2p");
    _p2p_network->set_node_delegate(this);
@@ -565,9 +568,32 @@ bool application_impl::has_item(const net::item_id& id)
  *
  * @throws exception if error validating the item, otherwise the item is safe to broadcast on.
  */
+/// Counts a block or transaction being applied, so shutdown can wait for it before closing the chain database
+struct application_impl::network_item_guard
+{
+   application_impl& app;
+   explicit network_item_guard( application_impl& a ) : app(a)
+   {
+      FC_ASSERT( !app._shutting_down, "Shutting down, not accepting blocks or transactions" );
+      ++app._network_items_in_flight;
+   }
+   ~network_item_guard() { --app._network_items_in_flight; }
+};
+
+void application_impl::wait_for_network_items()
+{
+   const auto deadline = fc::time_point::now() + fc::seconds(30);
+   while( _network_items_in_flight > 0 && fc::time_point::now() < deadline )
+      fc::usleep( fc::milliseconds(10) );
+   if( _network_items_in_flight > 0 )
+      wlog( "${n} block(s) or transaction(s) still being applied while the chain database closes",
+            ("n", _network_items_in_flight) );
+}
+
 bool application_impl::handle_block(const graphene::net::block_message& blk_msg, bool sync_mode,
                           std::vector<fc::uint160_t>& contained_transaction_message_ids)
 { try {
+   network_item_guard guard( *this );
 
    auto latency = fc::time_point::now() - blk_msg.block.timestamp;
    if (!sync_mode || blk_msg.block.block_num() % 10000 == 0)
@@ -639,6 +665,7 @@ bool application_impl::handle_block(const graphene::net::block_message& blk_msg,
 
 void application_impl::handle_transaction(const graphene::net::trx_message& transaction_message)
 { try {
+   network_item_guard guard( *this );
    static fc::time_point last_call;
    static int trx_count = 0;
    ++trx_count;
@@ -999,13 +1026,17 @@ application::~application()
       my->_websocket_tls_server.reset();
    if( my->_websocket_server )
       my->_websocket_server.reset();
+   my->stop_network_items();
    if( my->_p2p_network )
    {
       my->_p2p_network->close();
+      ilog( "Shutdown: releasing the P2P node" );
       my->_p2p_network.reset();
+      ilog( "Shutdown: P2P node released" );
    }
    if( my->_chain_db )
    {
+      my->wait_for_network_items();
       my->_chain_db->close();
    }
 }
@@ -1177,6 +1208,9 @@ void application::shutdown_plugins()
       my->_websocket_tls_server.reset();
    if( my->_websocket_server )
       my->_websocket_server.reset();
+   // Plugins act on every applied block, so let the ones being applied finish first
+   my->stop_network_items();
+   my->wait_for_network_items();
    for( auto& entry : my->_active_plugins )
       entry.second->plugin_shutdown();
    return;
@@ -1189,12 +1223,21 @@ void application::shutdown()
       my->_websocket_tls_server.reset();
    if( my->_websocket_server )
       my->_websocket_server.reset();
+   my->stop_network_items();
+   // Each step is logged: a slow shutdown then shows in the log where it is spending its time
    if( my->_p2p_network )
+   {
+      ilog( "Shutdown: closing the P2P network" );
       my->_p2p_network->close();
+      ilog( "Shutdown: P2P network closed" );
+   }
    if( my->_chain_db )
    {
+      my->wait_for_network_items();
+      ilog( "Shutdown: closing the chain database" );
       my->_chain_db->close();
       my->_chain_db = nullptr;
+      ilog( "Shutdown: chain database closed" );
    }
 }
 
