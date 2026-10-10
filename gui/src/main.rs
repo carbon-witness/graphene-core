@@ -1,0 +1,430 @@
+// No console window behind the app
+#![windows_subsystem = "windows"]
+
+use node_gui::i18n::{self, tr};
+use node_gui::settings::Settings;
+use node_gui::supervisor::{Phase, Status, Supervisor, STOP_TIMEOUT};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+use tauri::image::Image;
+use node_gui::glyphs::{self, Glyph};
+use tauri::menu::{IconMenuItem, Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::{TrayIcon, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Manager, State, WindowEvent, Wry};
+use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_opener::OpenerExt;
+
+/// How long Windows' shutdown is held for the node to stop; past it, the shutdown goes on regardless
+const SESSION_END_WAIT: Duration = Duration::from_secs(20);
+
+struct AppState {
+    sup: Arc<Supervisor>,
+    settings_path: PathBuf,
+}
+
+#[tauri::command]
+fn get_status(st: State<AppState>) -> Status {
+    st.sup.status()
+}
+
+#[tauri::command]
+fn get_log(st: State<AppState>, cursor: u64) -> Vec<(u64, String)> {
+    st.sup.log_lines(cursor, 2000)
+}
+
+#[tauri::command]
+fn node_start(app: AppHandle, st: State<AppState>) -> Result<(), String> {
+    report(&app, st.sup.start())
+}
+
+#[tauri::command]
+fn node_stop(st: State<AppState>) -> Result<(), String> {
+    st.sup.stop()
+}
+
+#[tauri::command]
+fn node_restart(app: AppHandle, st: State<AppState>) -> Result<(), String> {
+    report(&app, st.sup.restart())
+}
+
+/// A start that fails (another node running, port taken, node missing) gets an error box with OK, so it is
+/// clear why nothing happened; the window also keeps it under "Last event".
+fn report(app: &AppHandle, result: Result<(), String>) -> Result<(), String> {
+    if let Err(e) = &result {
+        error_dialog(app, e.clone());
+    }
+    result
+}
+
+fn error_dialog(app: &AppHandle, message: String) {
+    app.dialog()
+        .message(message)
+        .title("Graphene Node")
+        .kind(MessageDialogKind::Error)
+        .buttons(MessageDialogButtons::Ok)
+        .show(|_| {});
+}
+
+/// The app's version and the build of the node it runs, for the settings page. The node's answer is cached
+/// per executable and modification time: --version starts the whole program.
+#[tauri::command]
+fn get_versions(st: State<AppState>) -> (String, Option<String>) {
+    static CACHE: std::sync::Mutex<Option<(PathBuf, Option<std::time::SystemTime>, Option<String>)>> =
+        std::sync::Mutex::new(None);
+    let exe = st.sup.settings().node_exe;
+    let modified = std::fs::metadata(&exe).and_then(|m| m.modified()).ok();
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    let fresh = matches!(&*cache, Some((p, m, _)) if *p == exe && *m == modified);
+    if !fresh {
+        *cache = Some((exe.clone(), modified, node_gui::win::node_build(&exe)));
+    }
+    let node = cache.as_ref().and_then(|(_, _, b)| b.clone());
+    (env!("CARGO_PKG_VERSION").to_string(), node)
+}
+
+#[tauri::command]
+fn add_seed(st: State<AppState>, addr: String) -> Result<(), String> {
+    st.sup.add_seed(&addr)
+}
+
+#[tauri::command]
+fn remove_seed(st: State<AppState>, addr: String) -> Result<(), String> {
+    st.sup.remove_seed(&addr)
+}
+
+#[tauri::command]
+fn node_kill(st: State<AppState>) -> Result<(), String> {
+    st.sup.kill()
+}
+
+#[tauri::command]
+fn get_autostart() -> bool {
+    node_gui::win::autostart_command().is_some()
+}
+
+#[tauri::command]
+fn set_autostart(enabled: bool) -> Result<(), String> {
+    node_gui::win::set_autostart(enabled)
+}
+
+/// [code, name] pairs for the language picker
+#[tauri::command]
+fn get_languages() -> Vec<(String, String)> {
+    i18n::languages()
+}
+
+#[tauri::command]
+fn get_settings(st: State<AppState>) -> Settings {
+    st.sup.settings()
+}
+
+#[tauri::command]
+fn save_settings(st: State<AppState>, settings: Settings) -> Result<(), String> {
+    settings.save(&st.settings_path)?;
+    st.sup.set_settings(settings);
+    Ok(())
+}
+
+/// Opens a file or folder in Explorer; a missing one gets a clear message instead of a shell error
+fn open_existing(app: &AppHandle, path: &std::path::Path, lang: &str) -> Result<(), String> {
+    if !path.exists() {
+        return Err(i18n::trf(lang, "err.not_found", &[("path", path.display().to_string())]));
+    }
+    app.opener().open_path(path.display().to_string(), None::<&str>).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn open_data_dir(app: AppHandle, st: State<AppState>) -> Result<(), String> {
+    let s = st.sup.settings();
+    open_existing(&app, &s.data_dir, &s.language)
+}
+
+#[tauri::command]
+fn open_log(app: AppHandle, st: State<AppState>) -> Result<(), String> {
+    let s = st.sup.settings();
+    open_existing(&app, &s.log_path(), &s.language)
+}
+
+#[tauri::command]
+fn copy_rpc(app: AppHandle, st: State<AppState>) -> Result<(), String> {
+    let ep = st.sup.settings().rpc_endpoint;
+    app.clipboard().write_text(format!("ws://{ep}")).map_err(|e| e.to_string())
+}
+
+/// The tray icon: a white circle with the glyph of the node's state (see glyphs.rs)
+fn glyph_image(glyph: Glyph, size: u32) -> Image<'static> {
+    Image::new_owned(glyphs::rgba(glyph, size), size, size)
+}
+
+fn status_icon(color: &str) -> Image<'static> {
+    glyph_image(Glyph::for_status_color(color), 32)
+}
+
+fn show_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        w.show().ok();
+        w.unminimize().ok();
+        w.set_focus().ok();
+    }
+}
+
+/// "Выход": stops the node explicitly, never by ending the process tree.
+fn quit(app: AppHandle) {
+    std::thread::spawn(move || {
+        let sup = app.state::<AppState>().sup.clone();
+        if sup.is_node_running() {
+            sup.stop().ok();
+            if !sup.wait_stopped(STOP_TIMEOUT) {
+                let lang = sup.settings().language;
+                let kill = app
+                    .dialog()
+                    .message(tr(&lang, "dlg.quit_kill"))
+                    .title("Graphene Node")
+                    .kind(MessageDialogKind::Warning)
+                    .buttons(MessageDialogButtons::OkCancelCustom(
+                        tr(&lang, "dlg.kill_button"),
+                        tr(&lang, "dlg.wait_button"),
+                    ))
+                    .blocking_show();
+                if !kill {
+                    return;
+                }
+                sup.kill().ok();
+                sup.wait_stopped(Duration::from_secs(10));
+            }
+        }
+        // Windows keeps the icon of an exited app in the tray until the mouse passes over it; remove it first
+        if let Some(tray) = app.tray_by_id("main") {
+            tray.set_visible(false).ok();
+        }
+        app.remove_tray_by_id("main");
+        app.exit(0);
+    });
+}
+
+/// "Stop and close" quits like the tray's Quit; "Keep running in background" (or dismissing the dialog,
+/// which leaves the node alone) hides the window to the tray.
+fn ask_on_close(app: AppHandle) {
+    let lang = app.state::<AppState>().sup.settings().language;
+    let a = app.clone();
+    app.dialog()
+        .message(tr(&lang, "dlg.close"))
+        .title("Graphene Node")
+        .kind(MessageDialogKind::Info)
+        .buttons(MessageDialogButtons::OkCancelCustom(tr(&lang, "tray.quit"), tr(&lang, "dlg.close_background")))
+        .show(move |stop| {
+            if stop {
+                if let Some(w) = a.get_webview_window("main") {
+                    w.hide().ok();
+                }
+                quit(a);
+            } else if let Some(w) = a.get_webview_window("main") {
+                w.hide().ok();
+            }
+        });
+}
+
+struct TrayItems {
+    status: MenuItem<Wry>,
+    start: IconMenuItem<Wry>,
+    stop: IconMenuItem<Wry>,
+    restart: IconMenuItem<Wry>,
+    /// Every item with a fixed label and its translation key, relabelled when the language changes
+    labelled: Vec<(Box<dyn Fn(String) + Send>, String)>,
+}
+
+fn build_tray(app: &AppHandle, lang: &str) -> tauri::Result<(TrayIcon, TrayItems)> {
+    // The menu id doubles as the translation key "tray.<id>"
+    let item = |id: &str, enabled: bool| {
+        MenuItem::with_id(app, id, tr(lang, &format!("tray.{id}")), enabled, None::<&str>)
+    };
+    let sep = || PredefinedMenuItem::separator(app);
+    let status = MenuItem::with_id(app, "status", tr(lang, "status.stopped"), false, None::<&str>)?;
+    // The node's three actions carry the same glyphs as the window's buttons
+    let action = |id: &str, enabled: bool, glyph: Glyph| {
+        IconMenuItem::with_id(app, id, tr(lang, &format!("tray.{id}")), enabled, Some(glyph_image(glyph, 16)), None::<&str>)
+    };
+    let open = item("open", true)?;
+    let (start, stop, restart) =
+        (action("start", true, Glyph::Play)?, action("stop", false, Glyph::Pause)?, action("restart", false, Glyph::Restart)?);
+    let (copy, data, log, quit_item) =
+        (item("copy_rpc", true)?, item("open_data", true)?, item("open_log", true)?, item("quit", true)?);
+    let menu = Menu::with_items(
+        app,
+        &[
+            &status, &sep()?, &open, &sep()?, &start, &stop, &restart, &sep()?, &copy, &data, &log, &sep()?, &quit_item,
+        ],
+    )?;
+    let mut labelled: Vec<(Box<dyn Fn(String) + Send>, String)> = Vec::new();
+    for m in [&open, &copy, &data, &log, &quit_item] {
+        let m = m.clone();
+        let key = format!("tray.{}", m.id().as_ref());
+        labelled.push((Box::new(move |t| { m.set_text(t).ok(); }), key));
+    }
+    for m in [&start, &stop, &restart] {
+        let m = m.clone();
+        let key = format!("tray.{}", m.id().as_ref());
+        labelled.push((Box::new(move |t| { m.set_text(t).ok(); }), key));
+    }
+    let items = TrayItems { status, start, stop, restart, labelled };
+    let tray = TrayIconBuilder::with_id("main")
+        .icon(status_icon("gray"))
+        .tooltip("Graphene Node")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, ev| {
+            let st = app.state::<AppState>();
+            let result = match ev.id().as_ref() {
+                "open" => {
+                    show_main(app);
+                    Ok(())
+                }
+                "start" => st.sup.start(),
+                "stop" => st.sup.stop(),
+                "restart" => st.sup.restart(),
+                "copy_rpc" => copy_rpc(app.clone(), st.clone()),
+                "open_data" => open_data_dir(app.clone(), st.clone()),
+                "open_log" => open_log(app.clone(), st.clone()),
+                "quit" => {
+                    quit(app.clone());
+                    Ok(())
+                }
+                _ => Ok(()),
+            };
+            if let Err(e) = result {
+                error_dialog(app, e);
+            }
+        })
+        .on_tray_icon_event(|tray, ev| {
+            if let TrayIconEvent::DoubleClick { .. } = ev {
+                show_main(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    Ok((tray, items))
+}
+
+/// Keeps the tray icon, tooltip and menu in step with the node.
+fn tray_updates(app: AppHandle, tray: TrayIcon, items: TrayItems) {
+    std::thread::spawn(move || {
+        let sup = app.state::<AppState>().sup.clone();
+        let mut last_glyph = "";
+        let mut last_lang = sup.settings().language;
+        let mut last_summary = String::new();
+        let mut last_enabled = None;
+        loop {
+            let lang = sup.settings().language;
+            if lang != last_lang {
+                for (set_text, key) in &items.labelled {
+                    set_text(tr(&lang, key));
+                }
+                last_lang = lang;
+            }
+            let s = sup.status();
+            if s.glyph != last_glyph {
+                tray.set_icon(Some(glyph_image(Glyph::from_name(s.glyph), 32))).ok();
+                last_glyph = s.glyph;
+            }
+            // Only on change: every tray update is a round trip through Explorer
+            if s.summary != last_summary {
+                tray.set_tooltip(Some(format!("Graphene Node — {}", s.summary))).ok();
+                items.status.set_text(format!("● {}", s.summary)).ok();
+                last_summary = s.summary.clone();
+            }
+            let running = s.pid.is_some();
+            let enabled = (!running && s.phase != Phase::Stopping,
+                           running || matches!(s.phase, Phase::WaitingRestart | Phase::Failed),
+                           running);
+            if Some(enabled) != last_enabled {
+                items.start.set_enabled(enabled.0).ok();
+                items.stop.set_enabled(enabled.1).ok();
+                items.restart.set_enabled(enabled.2).ok();
+                last_enabled = Some(enabled);
+            }
+            std::thread::sleep(Duration::from_secs(1));
+        }
+    });
+}
+
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let settings_path = app.path().app_config_dir()?.join("settings.json");
+            let settings = Settings::load(&settings_path);
+            let start_now = settings.start_node_with_app;
+            let sup = Supervisor::start_new(settings);
+            // Before anything opens: with a node or program already in the way, there is nothing to show
+            if let Some(e) = sup.conflict() {
+                node_gui::win::error_box("Graphene Node", &e);
+                std::process::exit(1);
+            }
+            if start_now && !sup.is_node_running() {
+                if let Err(e) = sup.start() {
+                    error_dialog(app.handle(), e);
+                }
+            }
+            // Windows shutting down, restarting or logging off: stop the node cleanly first
+            let lang = sup.settings().language;
+            let (s_stop, s_start) = (sup.clone(), sup.clone());
+            node_gui::session_end::watch(
+                &tr(&lang, "shutdown.reason"),
+                settings_path.with_file_name("gui.log"),
+                node_gui::session_end::Actions {
+                    stop_node: Box::new(move || {
+                        let was_running = s_stop.is_node_running();
+                        s_stop.stop().ok();
+                        s_stop.wait_stopped(SESSION_END_WAIT);
+                        was_running
+                    }),
+                    start_node: Box::new(move || {
+                        s_start.start().ok();
+                    }),
+                },
+            );
+            app.manage(AppState { sup, settings_path });
+            let lang = app.state::<AppState>().sup.settings().language;
+            let (tray, items) = build_tray(app.handle(), &lang)?;
+            tray_updates(app.handle().clone(), tray, items);
+            // Started by Windows at logon: stay in the tray. Refresh the entry, in case the app was moved.
+            if std::env::args().any(|a| a == node_gui::win::AUTOSTART_ARG) {
+                node_gui::win::set_autostart(true).ok();
+            } else {
+                show_main(app.handle());
+            }
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // The window's close button asks whether to stop the node or keep it running in the tray
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                ask_on_close(window.app_handle().clone());
+            }
+        })
+        .invoke_handler(tauri::generate_handler![
+            get_status,
+            get_versions,
+            add_seed,
+            remove_seed,
+            get_log,
+            get_languages,
+            get_autostart,
+            set_autostart,
+            node_start,
+            node_stop,
+            node_restart,
+            node_kill,
+            get_settings,
+            save_settings,
+            open_data_dir,
+            open_log,
+            copy_rpc
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running the app");
+}

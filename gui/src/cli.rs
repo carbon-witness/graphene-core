@@ -1,0 +1,138 @@
+//! Drives the supervisor without a window, for tests:
+//!   supervisor-cli <node.exe> <data dir> <rpc endpoint> start   start the node, print status until it runs, leave it
+//!   supervisor-cli <node.exe> <data dir> <rpc endpoint> stop    attach through the lock file and stop it cleanly
+//!   supervisor-cli <node.exe> <data dir> <rpc endpoint> watch N print status every second for N seconds
+//!   supervisor-cli <node.exe> <data dir> <rpc endpoint> add-seed ADDR N   add a seed, then print status for N s
+
+use node_gui::settings::Settings;
+use node_gui::supervisor::{Phase, Supervisor, STOP_TIMEOUT};
+use std::time::{Duration, Instant};
+
+fn show(sup: &Supervisor) -> node_gui::supervisor::Status {
+    let s = sup.status();
+    println!(
+        "{:?} {} {} pid={:?} attached={} clean_stop={} head={:?} stale={:?} peers={} | {}{}",
+        s.phase,
+        s.color,
+        s.glyph,
+        s.pid,
+        s.attached,
+        s.can_stop_cleanly,
+        s.chain.as_ref().map(|c| c.head_block),
+        s.api_stale_seconds,
+        match (&s.peers, &s.peers_note) {
+            (Some(p), _) => format!("{:?}", p.iter().map(|p| format!("{} {}", p.addr, p.version)).collect::<Vec<_>>()),
+            (None, Some(n)) => format!("none ({n})"),
+            (None, None) => "none".into(),
+        },
+        s.summary,
+        s.last_exit.as_deref().map(|e| format!(" | last: {e}")).unwrap_or_default()
+    );
+    s
+}
+
+fn main() {
+    let a: Vec<String> = std::env::args().collect();
+    if a.len() < 5 {
+        eprintln!("usage: supervisor-cli <node.exe> <data dir> <rpc endpoint> start|stop|watch N|add-seed ADDR N");
+        std::process::exit(2);
+    }
+    let settings = Settings {
+        node_exe: a[1].clone().into(),
+        data_dir: a[2].clone().into(),
+        rpc_endpoint: a[3].clone(),
+        start_node_with_app: false,
+        ..Settings::default()
+    };
+    let sup = Supervisor::start_new(settings);
+    std::thread::sleep(Duration::from_millis(700));
+    match a[4].as_str() {
+        "start" => {
+            if let Err(e) = sup.start() {
+                println!("start failed: {e}");
+                std::process::exit(1);
+            }
+            let end = Instant::now() + Duration::from_secs(120);
+            while Instant::now() < end {
+                let s = show(&sup);
+                if s.phase == Phase::Running && s.chain.is_some() {
+                    return;
+                }
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            std::process::exit(1);
+        }
+        "stop" => {
+            let s = show(&sup);
+            if s.pid.is_none() {
+                println!("no node to stop");
+                std::process::exit(1);
+            }
+            let t = Instant::now();
+            if let Err(e) = sup.stop() {
+                println!("stop failed: {e}");
+            }
+            let ok = sup.wait_stopped(STOP_TIMEOUT + Duration::from_secs(5));
+            show(&sup);
+            println!("stopped={ok} in {} ms", t.elapsed().as_millis());
+            std::process::exit(if ok { 0 } else { 1 });
+        }
+        "restart" => {
+            sup.restart().ok();
+            for _ in 0..40 {
+                show(&sup);
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        }
+        "session" => {
+            // stays until Windows (or a test) ends the session; the node is stopped on WM_QUERYENDSESSION
+            let (s_stop, s_start) = (sup.clone(), sup.clone());
+            node_gui::session_end::watch(
+                "Stopping the Graphene node",
+                std::path::PathBuf::from("gui.log"),
+                node_gui::session_end::Actions {
+                    stop_node: Box::new(move || {
+                        println!("session ending: stopping the node");
+                        let was = s_stop.is_node_running();
+                        s_stop.stop().ok();
+                        let ok = s_stop.wait_stopped(Duration::from_secs(20));
+                        show(&s_stop);
+                        println!("stopped={ok}");
+                        was
+                    }),
+                    start_node: Box::new(move || {
+                        println!("shutdown cancelled: starting the node again");
+                        s_start.start().ok();
+                    }),
+                },
+            );
+            std::thread::sleep(Duration::from_secs(120));
+        }
+        "add-seed" => {
+            // add-seed ADDR N: add a seed (config.ini, and the running node at once), then watch N seconds
+            match sup.add_seed(a.get(5).map(String::as_str).unwrap_or("")) {
+                Ok(()) => println!("seed added"),
+                Err(e) => println!("add-seed failed: {e}"),
+            }
+            let n: u64 = a.get(6).and_then(|x| x.parse().ok()).unwrap_or(10);
+            for _ in 0..n {
+                let s = show(&sup);
+                for seed in s.seeds.iter().filter(|x| x.source != "builtin") {
+                    println!("  seed {} {:?} {} failures={} {}", seed.addr, seed.ips, seed.state, seed.failures, seed.error);
+                }
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        }
+        "watch" => {
+            let n: u64 = a.get(5).and_then(|x| x.parse().ok()).unwrap_or(10);
+            for _ in 0..n {
+                show(&sup);
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        }
+        other => {
+            eprintln!("unknown command {other}");
+            std::process::exit(2);
+        }
+    }
+}

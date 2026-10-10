@@ -1,0 +1,159 @@
+name: windows
+
+# Cross-builds the Windows package on Linux, as contrib/win64/README.md and gui/README.md describe:
+# witness_node.exe with MinGW-w64, graphene-node-gui.exe with Cargo, and a zip of both with
+# WebView2Loader.dll. Every run keeps the zip as an artifact; a release tag graphene-X.Y.Z (or
+# graphene-X.Y.Z-rcN) also attaches it to the GitHub release of the tag, creating a draft if there is
+# none yet, like the docker workflow does with its debug symbols.
+on:
+  push:
+    branches: ['**']
+    tags: ['graphene-*']
+    # Documentation alone needs no build; a tag always builds (paths filters do not apply to tags)
+    paths-ignore:
+      - '**.md'
+      - 'images/**'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'images/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    # The toolchain the Windows builds were checked with: MinGW-w64 GCC 13 (posix), Wine 9
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    permissions:
+      contents: write   # upload of the zip to the release
+    env:
+      PUBLISH: ${{ startsWith(github.ref, 'refs/tags/graphene-') }}
+      PRERELEASE: ${{ startsWith(github.ref, 'refs/tags/graphene-') && contains(github.ref_name, '-rc') }}
+      DEPS: ${{ github.workspace }}/../win64-deps
+      WINEDEBUG: -all
+      CCACHE_DIR: ${{ github.workspace }}/../ccache
+      CCACHE_MAXSIZE: 2G
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Host packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            g++-mingw-w64-x86-64-posix cmake make perl git ccache zip wine wine64
+          # Create the Wine prefix once, before parallel make runs several build helpers at a time
+          wineboot --init
+          wineserver --wait
+
+      # Boost, OpenSSL, zlib and curl take about 30 minutes; they change only with build-deps.sh.
+      # Saved right after they are built, so a later failing step does not lose them.
+      - uses: actions/cache/restore@v6
+        id: deps
+        with:
+          path: |
+            ${{ env.DEPS }}/include
+            ${{ env.DEPS }}/lib
+          key: win64-deps-${{ hashFiles('contrib/win64/build-deps.sh', 'contrib/win64/mingw-w64-x86_64.cmake') }}
+
+      - name: Dependencies
+        if: steps.deps.outputs.cache-hit != 'true'
+        run: |
+          contrib/win64/build-deps.sh "$DEPS"
+          rm -rf "$DEPS/src"
+
+      - uses: actions/cache/save@v6
+        if: steps.deps.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ${{ env.DEPS }}/include
+            ${{ env.DEPS }}/lib
+          key: ${{ steps.deps.outputs.cache-primary-key }}
+
+      - uses: actions/cache/restore@v6
+        id: ccache
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: win64-ccache-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            win64-ccache-${{ github.ref_name }}-
+            win64-ccache-
+
+      - name: witness_node.exe
+        run: |
+          ccache --zero-stats
+          contrib/win64/build.sh "$DEPS" build-win64 witness_node
+          ccache --show-stats
+          x86_64-w64-mingw32-strip build-win64/programs/witness_node/witness_node.exe
+          wine build-win64/programs/witness_node/witness_node.exe --version
+
+      # Also after a failed build: the objects compiled so far are what the next run needs
+      - uses: actions/cache/save@v6
+        if: always() && steps.ccache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.ccache.outputs.cache-primary-key }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gui
+
+      - name: graphene-node-gui.exe
+        working-directory: gui
+        run: |
+          cargo build --release --target x86_64-pc-windows-gnu
+          cargo test --release --target x86_64-pc-windows-gnu --lib
+
+      - name: Package
+        id: package
+        run: |
+          if [[ "$PUBLISH" == true ]]; then
+            version=${GITHUB_REF_NAME#graphene-}
+          else
+            version=$(sed -nE 's/^set\( GRAPHENE_VERSION "([^"]+)" \)/\1/p' CMakeLists.txt)-${GITHUB_SHA::8}
+          fi
+          name=graphene-node-win64-$version
+          mkdir "$name"
+          cp build-win64/programs/witness_node/witness_node.exe "$name/"
+          cp gui/target/x86_64-pc-windows-gnu/release/graphene-node-gui.exe "$name/"
+          cp gui/target/x86_64-pc-windows-gnu/release/WebView2Loader.dll "$name/"
+          # MIT: the copyright and permission notice go with every copy
+          cp LICENSE.txt "$name/"
+          zip -q -r "$name.zip" "$name"
+          ls -l "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: ${{ steps.package.outputs.name }}/
+          retention-days: 90
+
+      - name: Attach the zip to the release
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            prerelease=()
+            [[ "$PRERELEASE" == true ]] && prerelease=(--prerelease)
+            # The docker workflow may create it at the same moment
+            gh release create "$TAG" --draft "${prerelease[@]}" --verify-tag --title "$TAG" --notes "" \
+              || gh release view "$TAG" >/dev/null
+          fi
+          gh release upload "$TAG" "${{ steps.package.outputs.name }}.zip" --clobber

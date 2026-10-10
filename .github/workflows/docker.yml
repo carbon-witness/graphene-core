@@ -13,7 +13,14 @@ on:
   push:
     branches: ['**']
     tags: ['graphene-*']
+    # Documentation alone needs no build; a tag always builds (paths filters do not apply to tags)
+    paths-ignore:
+      - '**.md'
+      - 'images/**'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'images/**'
   workflow_dispatch:
 
 permissions:
@@ -106,7 +113,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # The cache only speeds up the next run: a failed upload to it (seen as "error writing layer blob:
+          # not_found" from the GitHub cache service) must not fail a build that succeeded
+          cache-to: type=gha,mode=max,ignore-error=true
 
       - name: Smoke test
         run: |
