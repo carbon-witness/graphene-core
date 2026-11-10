@@ -35,5 +35,7 @@ namespace graphene { namespace net {
    FC_DECLARE_DERIVED_EXCEPTION( peer_is_on_an_unreachable_fork,      net_exception, 90005 )
    FC_DECLARE_DERIVED_EXCEPTION( unlinkable_block_exception,          net_exception, 90006 )
    FC_DECLARE_DERIVED_EXCEPTION( block_timestamp_in_future_exception, net_exception, 90007 )
+   FC_DECLARE_DERIVED_EXCEPTION( p2p_tls_error,                       net_exception, 90008 )
+   FC_DECLARE_DERIVED_EXCEPTION( p2p_tls_not_supported,               net_exception, 90009 )
 
 } }

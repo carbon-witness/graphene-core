@@ -11,6 +11,15 @@
 
 namespace graphene { namespace app { namespace detail {
 
+/// A seed node from the configuration: [tls://]host:port[?sni=name]
+struct seed_node_address
+{
+   std::string               host_and_port;
+   bool                      tls = false;       ///< given as tls://: connect over TLS right away
+   fc::optional<std::string> server_name;       ///< SNI: from ?sni=, or the host if it is a name
+};
+seed_node_address parse_seed_node_address( const std::string& seed );
+
 
 class application_impl : public net::node_delegate
    {

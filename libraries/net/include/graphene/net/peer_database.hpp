@@ -44,6 +44,14 @@ namespace graphene { namespace net {
     last_connection_succeeded
   };
 
+  /// How to connect to a peer: what the node learned about its P2P transport
+  enum potential_peer_transport
+  {
+    transport_unknown, ///< not known yet: with TLS on "auto", try TLS and fall back to plain
+    transport_plain,   ///< an old node without TLS
+    transport_tls      ///< supports TLS (connected over it, announced it, or given as tls://)
+  };
+
   struct potential_peer_record
   {
     fc::ip::endpoint                  endpoint;
@@ -53,6 +61,9 @@ namespace graphene { namespace net {
     uint32_t                          number_of_successful_connection_attempts;
     uint32_t                          number_of_failed_connection_attempts;
     fc::optional<fc::exception>       last_error;
+    fc::enum_type<uint8_t,potential_peer_transport> transport = transport_unknown;
+    /// SNI for TLS connections to this peer, from a seed node given by name or with ?sni=
+    fc::optional<std::string>         tls_server_name;
 
     potential_peer_record() :
       number_of_successful_connection_attempts(0),
