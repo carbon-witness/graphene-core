@@ -39,6 +39,9 @@
 #include <fc/log/logger.hpp>
 
 #include <boost/filesystem/path.hpp>
+#include <boost/asio/io_context.hpp>
+#include <boost/asio/ip/udp.hpp>
+#include <boost/asio/ip/tcp.hpp>
 
 #define BOOST_TEST_MODULE Test Application
 #include <boost/test/included/unit_test.hpp>
@@ -358,16 +361,44 @@ BOOST_AUTO_TEST_CASE( two_node_network )
    }
 }
 
-/// Reconnecting from the same listening port right after a disconnect.
-/// The node binds its outbound connections to its own listening port. The side that closes a
-/// connection keeps it in TIME_WAIT for a minute, and until then connect() between the same two
-/// endpoints fails with "Cannot assign requested address". The node has to fall back to a port the
-/// OS picks instead of giving up on the peer.
+/// A local address that is not loopback, or an empty string if the machine has none.
+/// Connects a UDP socket (which sends nothing) to a documentation address to learn the source
+/// address the system would use.
+static std::string non_loopback_local_address()
+{
+   try
+   {
+      boost::asio::io_context io;
+      boost::asio::ip::udp::socket socket( io );
+      socket.connect( boost::asio::ip::udp::endpoint( boost::asio::ip::make_address("192.0.2.1"), 9 ) );
+      boost::asio::ip::address address = socket.local_endpoint().address();
+      if( address.is_v4() && !address.is_loopback() )
+         return address.to_string();
+   }
+   catch( const std::exception& ) {}
+   return std::string();
+}
+
+/// Connecting to a peer while an earlier connection to it is not closed yet.
+/// The node binds its outbound connections to its own listening port. While an earlier
+/// connection between the same two endpoints still exists (an unanswered FIN keeps it in
+/// FIN_WAIT for minutes when the network is down, which is when a node loses all its peers),
+/// connect() fails with "Cannot assign requested address" (EADDRNOTAVAIL). The node has to fall
+/// back to a port the OS picks instead of counting the peer as failed and retrying a minute later.
+/// A socket from the same local endpoint to the same peer, held open by the test, stands in
+/// for the earlier connection. The addresses are not loopback, where Linux treats connections
+/// more leniently.
 BOOST_AUTO_TEST_CASE( reconnect_from_same_port_after_disconnect )
 {
    using namespace graphene::chain;
    using namespace graphene::app;
    try {
+      const std::string host = non_loopback_local_address();
+      if( host.empty() )
+      {
+         BOOST_TEST_MESSAGE( "No non-loopback address, skipping" );
+         return;
+      }
       fc::temp_directory app1_dir( graphene::utilities::temp_directory_path() );
       const boost::filesystem::path genesis_file = create_genesis_file( app1_dir );
 
@@ -381,35 +412,44 @@ BOOST_AUTO_TEST_CASE( reconnect_from_same_port_after_disconnect )
          return cfg;
       };
 
+      // application keeps a pointer to its options: they have to outlive it
+      const bpo::variables_map cfg1 = make_config(host + ":3940", {});
       graphene::app::application app1;
       app1.startup_plugins();
-      app1.initialize(app1_dir.path(), make_config("127.0.0.1:3940", {}));
+      app1.initialize(app1_dir.path(), cfg1);
       app1.startup();
+      // app1 only accepts: if it connected to app2 itself, that connection would hide the problem
+      app1.p2p_node()->set_advanced_node_parameters( fc::mutable_variant_object()
+                                                     ("desired_number_of_connections", 0) );
 
-      {
-         BOOST_TEST_MESSAGE( "Connecting app2 from 127.0.0.1:3941" );
-         fc::temp_directory app2_dir( graphene::utilities::temp_directory_path() );
-         graphene::app::application app2;
-         app2.startup_plugins();
-         app2.initialize(app2_dir.path(), make_config("127.0.0.1:3941", {"127.0.0.1:3940"}));
-         app2.startup();
-         BOOST_REQUIRE( wait_for( [&app1] { return app1.p2p_node()->get_connection_count() == 1u; } ) );
-         BOOST_TEST_MESSAGE( "Shutting app2 down: it closes first, so 3941 -> 3940 stays in TIME_WAIT" );
-      }
-      BOOST_REQUIRE( wait_for( [&app1] { return app1.p2p_node()->get_connection_count() == 0u; } ) );
+      // app2 without seed nodes first: its listener has to own the port before another socket
+      // binds to it (the node itself binds its outbound sockets the same way)
+      fc::temp_directory app2_dir( graphene::utilities::temp_directory_path() );
+      const bpo::variables_map cfg2 = make_config(host + ":3941", {});
+      graphene::app::application app2;
+      app2.startup_plugins();
+      app2.initialize(app2_dir.path(), cfg2);
+      app2.startup();
 
-      BOOST_TEST_MESSAGE( "Connecting app3 from the same 127.0.0.1:3941" );
-      fc::temp_directory app3_dir( graphene::utilities::temp_directory_path() );
-      graphene::app::application app3;
-      app3.startup_plugins();
-      app3.initialize(app3_dir.path(), make_config("127.0.0.1:3941", {"127.0.0.1:3940"}));
-      app3.startup();
-      // Well under the one-minute TIME_WAIT and the 30 s peer retry time
-      BOOST_CHECK( wait_for( [&app1] { return app1.p2p_node()->get_connection_count() == 1u; } ) );
-      BOOST_CHECK_EQUAL( app3.p2p_node()->get_connection_count(), 1u );
+      BOOST_TEST_MESSAGE( "An earlier connection " + host + ":3941 -> " + host + ":3940 that is not closed" );
+      boost::asio::io_context io;
+      boost::asio::ip::tcp::socket earlier_connection( io );
+      earlier_connection.open( boost::asio::ip::tcp::v4() );
+      earlier_connection.set_option( boost::asio::socket_base::reuse_address(true) );
+#ifdef SO_REUSEPORT
+      earlier_connection.set_option( boost::asio::detail::socket_option::boolean<SOL_SOCKET, SO_REUSEPORT>(true) );
+#endif
+      const auto address = boost::asio::ip::make_address( host );
+      earlier_connection.bind( boost::asio::ip::tcp::endpoint( address, 3941 ) );
+      earlier_connection.connect( boost::asio::ip::tcp::endpoint( address, 3940 ) );
+
+      BOOST_TEST_MESSAGE( "app2 connects to app1 from " + host + ":3941" );
+      app2.p2p_node()->connect_to_endpoint( fc::ip::endpoint::from_string( host + ":3940" ) );
+      // Well under the retry delay after a failed attempt
+      BOOST_CHECK( wait_for( [&] { return app2.p2p_node()->get_connection_count() == 1u; }, fc::seconds(15) ) );
+      earlier_connection.close();
    } catch( fc::exception& e ) {
-      edump((e.to_detail_string()));
-      throw;
+      BOOST_FAIL( e.to_detail_string() );
    }
 }
 
