@@ -11,7 +11,8 @@ name: docker
 # latest, and its draft release is marked as a pre-release.
 on:
   push:
-    branches: ['**']
+    # test/ and ci/ branches check tests and CI changes and need no binaries (tests.yml runs there)
+    branches: ['**', '!test/**', '!ci/**']
     tags: ['graphene-*']
     # Documentation alone needs no build; a tag always builds (paths filters do not apply to tags)
     paths-ignore:
