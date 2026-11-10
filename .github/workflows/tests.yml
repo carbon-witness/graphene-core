@@ -60,7 +60,9 @@ jobs:
       - name: Trust the workspace
         run: git config --global --add safe.directory '*'
 
-      - uses: actions/cache@v6
+      # Restore and save are separate steps: actions/cache saves only when the whole job
+      # succeeds, so a failing test would throw the compiled objects away every time
+      - uses: actions/cache/restore@v6
         with:
           path: .ccache
           key: tests-ccache-${{ github.ref_name }}-${{ github.sha }}
@@ -83,6 +85,13 @@ jobs:
           [ "$CHAIN_TEST" = true ] && targets="$targets chain_test"
           cmake --build build --parallel "$(nproc)" --target $targets
           ccache -s
+
+      # Also after a failed build: what compiled is kept for the next run
+      - uses: actions/cache/save@v6
+        if: always()
+        with:
+          path: .ccache
+          key: tests-ccache-${{ github.ref_name }}-${{ github.sha }}
 
       - name: app_test
         timeout-minutes: 20

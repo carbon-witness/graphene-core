@@ -39,6 +39,8 @@
 #include <fc/log/logger.hpp>
 
 #include <boost/filesystem/path.hpp>
+#include <boost/asio/io_context.hpp>
+#include <boost/asio/ip/udp.hpp>
 
 #define BOOST_TEST_MODULE Test Application
 #include <boost/test/included/unit_test.hpp>
@@ -358,16 +360,42 @@ BOOST_AUTO_TEST_CASE( two_node_network )
    }
 }
 
-/// Reconnecting from the same listening port right after a disconnect.
+/// A local address that is not loopback, or an empty string if the machine has none.
+/// Connects a UDP socket (which sends nothing) to a documentation address to learn the source
+/// address the system would use.
+static std::string non_loopback_local_address()
+{
+   try
+   {
+      boost::asio::io_context io;
+      boost::asio::ip::udp::socket socket( io );
+      socket.connect( boost::asio::ip::udp::endpoint( boost::asio::ip::make_address("192.0.2.1"), 9 ) );
+      boost::asio::ip::address address = socket.local_endpoint().address();
+      if( address.is_v4() && !address.is_loopback() )
+         return address.to_string();
+   }
+   catch( const std::exception& ) {}
+   return std::string();
+}
+
+/// Reconnecting to a peer right after disconnecting from it.
 /// The node binds its outbound connections to its own listening port. The side that closes a
 /// connection keeps it in TIME_WAIT for a minute, and until then connect() between the same two
 /// endpoints fails with "Cannot assign requested address". The node has to fall back to a port the
-/// OS picks instead of giving up on the peer.
+/// OS picks instead of counting the peer as failed and retrying a minute later.
+/// The addresses must not be loopback: with net.ipv4.tcp_tw_reuse = 2 (the default) Linux reuses
+/// TIME_WAIT connections on loopback, and the problem does not show there.
 BOOST_AUTO_TEST_CASE( reconnect_from_same_port_after_disconnect )
 {
    using namespace graphene::chain;
    using namespace graphene::app;
    try {
+      const string host = non_loopback_local_address();
+      if( host.empty() )
+      {
+         BOOST_TEST_MESSAGE( "No non-loopback address, skipping" );
+         return;
+      }
       fc::temp_directory app1_dir( graphene::utilities::temp_directory_path() );
       const boost::filesystem::path genesis_file = create_genesis_file( app1_dir );
 
@@ -382,35 +410,40 @@ BOOST_AUTO_TEST_CASE( reconnect_from_same_port_after_disconnect )
       };
 
       // application keeps a pointer to its options: they have to outlive it
-      const bpo::variables_map cfg1 = make_config("127.0.0.1:3940", {});
+      const bpo::variables_map cfg1 = make_config(host + ":3940", {});
       graphene::app::application app1;
       app1.startup_plugins();
       app1.initialize(app1_dir.path(), cfg1);
       app1.startup();
+      // app1 only accepts: if it connected to app2 itself, the connection would hide the problem
+      app1.p2p_node()->set_advanced_node_parameters( fc::mutable_variant_object()
+                                                     ("desired_number_of_connections", 0) );
 
-      {
-         BOOST_TEST_MESSAGE( "Connecting app2 from 127.0.0.1:3941" );
-         fc::temp_directory app2_dir( graphene::utilities::temp_directory_path() );
-         const bpo::variables_map cfg2 = make_config("127.0.0.1:3941", {"127.0.0.1:3940"});
-         graphene::app::application app2;
-         app2.startup_plugins();
-         app2.initialize(app2_dir.path(), cfg2);
-         app2.startup();
-         BOOST_REQUIRE( wait_for( [&app1] { return app1.p2p_node()->get_connection_count() == 1u; } ) );
-         BOOST_TEST_MESSAGE( "Shutting app2 down: it closes first, so 3941 -> 3940 stays in TIME_WAIT" );
-      }
-      BOOST_REQUIRE( wait_for( [&app1] { return app1.p2p_node()->get_connection_count() == 0u; } ) );
+      BOOST_TEST_MESSAGE( "Connecting app2 from " + host + ":3941" );
+      fc::temp_directory app2_dir( graphene::utilities::temp_directory_path() );
+      const bpo::variables_map cfg2 = make_config(host + ":3941", {host + ":3940"});
+      graphene::app::application app2;
+      app2.startup_plugins();
+      app2.initialize(app2_dir.path(), cfg2);
+      app2.startup();
+      BOOST_REQUIRE( wait_for( [&] { return app1.p2p_node()->get_connection_count() == 1u
+                                         && app2.p2p_node()->get_connection_count() == 1u; } ) );
 
-      BOOST_TEST_MESSAGE( "Connecting app3 from the same 127.0.0.1:3941" );
-      fc::temp_directory app3_dir( graphene::utilities::temp_directory_path() );
-      const bpo::variables_map cfg3 = make_config("127.0.0.1:3941", {"127.0.0.1:3940"});
-      graphene::app::application app3;
-      app3.startup_plugins();
-      app3.initialize(app3_dir.path(), cfg3);
-      app3.startup();
-      // Well under the one-minute TIME_WAIT and the 30 s peer retry time
-      BOOST_CHECK( wait_for( [&app1] { return app1.p2p_node()->get_connection_count() == 1u; } ) );
-      BOOST_CHECK_EQUAL( app3.p2p_node()->get_connection_count(), 1u );
+      BOOST_TEST_MESSAGE( "app2 disconnects: it closes first, so its side stays in TIME_WAIT" );
+      const fc::variant_object default_parameters = app2.p2p_node()->get_advanced_node_parameters();
+      app2.p2p_node()->set_advanced_node_parameters( fc::mutable_variant_object()
+                                                     ("maximum_number_of_connections", 0)
+                                                     ("desired_number_of_connections", 0) );
+      BOOST_REQUIRE( wait_for( [&] { return app1.p2p_node()->get_connection_count() == 0u
+                                         && app2.p2p_node()->get_connection_count() == 0u; },
+                               fc::seconds(30) ) );
+
+      BOOST_TEST_MESSAGE( "app2 may connect again" );
+      app2.p2p_node()->set_advanced_node_parameters( default_parameters );
+      // Well under the one-minute TIME_WAIT and the retry delay after a failed attempt
+      BOOST_CHECK( wait_for( [&] { return app1.p2p_node()->get_connection_count() == 1u
+                                       && app2.p2p_node()->get_connection_count() == 1u; },
+                             fc::seconds(20) ) );
    } catch( fc::exception& e ) {
       edump((e.to_detail_string()));
       throw;
