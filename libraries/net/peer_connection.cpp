@@ -232,6 +232,7 @@ namespace graphene { namespace net
         direction = peer_connection_direction::outbound;
 
         _remote_endpoint = remote_endpoint;
+        bool bound_to_local_endpoint = false;
         if( local_endpoint )
         {
           // the caller wants us to bind the local side of this socket to a specific ip/port
@@ -241,6 +242,7 @@ namespace graphene { namespace net
           try
           {
             _message_connection.bind( *local_endpoint );
+            bound_to_local_endpoint = true;
           }
           catch ( const fc::canceled_exception& )
           {
@@ -252,7 +254,31 @@ namespace graphene { namespace net
           }
         }
         negotiation_status = connection_negotiation_status::connecting;
-        _message_connection.connect_to( remote_endpoint );
+        try
+        {
+          _message_connection.connect_to( remote_endpoint );
+        }
+        catch ( const fc::canceled_exception& )
+        {
+          throw;
+        }
+        catch ( const fc::exception& except )
+        {
+          // A successful bind() does not mean connect() can use that local endpoint: while an
+          // earlier connection between the same two endpoints is still in TIME_WAIT, connect()
+          // fails with "Cannot assign requested address" (EADDRNOTAVAIL). That happens after
+          // every disconnect, so the node could not reconnect to any peer it had just lost.
+          // If the TCP connection was never established, retry once from a port the OS picks.
+          // Failures after the TCP connect (in the key exchange) are not retried.
+          if( !bound_to_local_endpoint || tcp_connection_established() )
+            throw;
+          wlog( "Failed to connect to ${remote_endpoint} from local endpoint ${local_endpoint}, retrying from an OS-selected endpoint: ${except}",
+                ("remote_endpoint", remote_endpoint)("local_endpoint", *local_endpoint)("except", except.to_string()) );
+          fc::tcp_socket& socket = _message_connection.get_socket();
+          socket.close();
+          socket.open();
+          _message_connection.connect_to( remote_endpoint );
+        }
         negotiation_status = connection_negotiation_status::connected;
         their_state = their_connection_state::just_connected;
         our_state = our_connection_state::just_connected;
@@ -264,6 +290,19 @@ namespace graphene { namespace net
         throw;
       }
     } // connect_to()
+
+    bool peer_connection::tcp_connection_established()
+    {
+      try
+      {
+        _message_connection.get_socket().remote_endpoint();
+        return true;
+      }
+      catch ( const fc::exception& )
+      {
+        return false;
+      }
+    }
 
     void peer_connection::on_message( message_oriented_connection* originating_connection, const message& received_message )
     {
