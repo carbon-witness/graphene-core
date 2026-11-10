@@ -271,6 +271,7 @@ namespace graphene { namespace net
       bool _currently_handling_message = false; // true while we're in the middle of handling a message from the remote system
       peer_connection(peer_connection_delegate* delegate);
       void destroy();
+      bool tcp_connection_established();
     public:
       static peer_connection_ptr make_shared(peer_connection_delegate* delegate); // use this instead of the constructor
       virtual ~peer_connection();
