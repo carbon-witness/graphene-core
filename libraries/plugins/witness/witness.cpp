@@ -377,7 +377,7 @@ block_production_condition::block_production_condition_enum witness_plugin::mayb
    uint32_t prate = db.witness_participation_rate();
    if( prate < _required_witness_participation )
    {
-      capture("pct", uint32_t(100*uint64_t(prate) / GRAPHENE_1_PERCENT));
+      capture("pct", uint32_t(prate / GRAPHENE_1_PERCENT)); // prate is in hundredths of a percent
       return block_production_condition::low_participation;
    }
 

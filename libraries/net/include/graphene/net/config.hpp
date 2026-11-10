@@ -38,6 +38,11 @@
  */
 #define MAX_MESSAGE_SIZE                                     1024*1024*2
 #define GRAPHENE_NET_DEFAULT_PEER_CONNECTION_RETRY_TIME      30 // seconds
+/**
+ * The delay before retrying a peer is (failed attempts + 1) * the retry time, but the multiplier is
+ * capped at this value: with the default 30 s retry time a peer is retried at least every 5.5 minutes.
+ */
+#define GRAPHENE_NET_MAX_PEER_CONNECTION_RETRY_MULTIPLIER    11
 
 /**
  * AFter trying all peers, how long to wait before we check to
