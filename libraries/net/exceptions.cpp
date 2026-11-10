@@ -39,5 +39,8 @@ namespace graphene { namespace net {
    FC_IMPLEMENT_DERIVED_EXCEPTION( unlinkable_block_exception,          net_exception, 90006, "unlinkable block" )
    FC_IMPLEMENT_DERIVED_EXCEPTION( block_timestamp_in_future_exception, net_exception, 90007,
                                    "block timestamp in the future" )
+   FC_IMPLEMENT_DERIVED_EXCEPTION( p2p_tls_error,                       net_exception, 90008, "P2P TLS error" )
+   FC_IMPLEMENT_DERIVED_EXCEPTION( p2p_tls_not_supported,               net_exception, 90009,
+                                   "the peer does not support P2P TLS" )
 
 } }

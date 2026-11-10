@@ -26,6 +26,7 @@
 #include <graphene/net/core_messages.hpp>
 #include <graphene/net/message.hpp>
 #include <graphene/net/peer_database.hpp>
+#include <graphene/net/tls.hpp>
 
 #include <graphene/protocol/types.hpp>
 
@@ -210,6 +211,16 @@ namespace graphene { namespace net {
          *  the number connected peers falls below the target.
          */
         void      add_node( const fc::ip::endpoint& ep );
+
+        /// TLS for P2P connections (default: auto with a self-signed certificate); call before
+        /// listen_to_p2p_network()
+        void      set_p2p_tls_options( const p2p_tls_options& options );
+        /**
+         * What the node knows about how to connect to @p ep, from a seed node given as
+         * tls://host:port (@p tls true) or by host name (@p server_name, sent as SNI).
+         */
+        void      set_peer_transport( const fc::ip::endpoint& ep, bool tls,
+                                      const fc::optional<std::string>& server_name );
 
         /**
          *  Attempt to connect to the specified endpoint immediately.

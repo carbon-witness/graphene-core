@@ -289,9 +289,12 @@ FC_REFLECT_ENUM( graphene::net::potential_peer_last_connection_disposition,
                  (never_attempted_to_connect)
                  (last_connection_failed)(last_connection_rejected)
                  (last_connection_handshaking_failed)(last_connection_succeeded) )
+FC_REFLECT_ENUM( graphene::net::potential_peer_transport,
+                 (transport_unknown)(transport_plain)(transport_tls) )
 FC_REFLECT_DERIVED_NO_TYPENAME( graphene::net::potential_peer_record, BOOST_PP_SEQ_NIL,
                                 (endpoint)(last_seen_time)(last_connection_disposition)
                                 (last_connection_attempt_time)(number_of_successful_connection_attempts)
-                                (number_of_failed_connection_attempts)(last_error) )
+                                (number_of_failed_connection_attempts)(last_error)
+                                (transport)(tls_server_name) )
 
 GRAPHENE_IMPLEMENT_EXTERNAL_SERIALIZATION( graphene::net::potential_peer_record)

@@ -2,6 +2,7 @@ file(GLOB HEADERS "include/graphene/net/*.hpp")
 
 set(SOURCES node.cpp
             stcp_socket.cpp
+            tls.cpp
             core_messages.cpp
             exceptions.cpp
             peer_database.cpp

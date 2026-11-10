@@ -107,6 +107,7 @@ namespace graphene { namespace net
       peer_connection_delegate*      _node;
       fc::optional<fc::ip::endpoint> _remote_endpoint;
       message_oriented_connection    _message_connection;
+      std::shared_ptr<const tls_context> _tls_context;
 
       /* a base class for messages on the queue, to hide the fact that some
        * messages are complete messages and some are only hashes of messages.
@@ -277,6 +278,17 @@ namespace graphene { namespace net
       virtual ~peer_connection();
 
       fc::tcp_socket& get_socket();
+
+      /// TLS settings for the following accept_connection() or connect_to(), see stcp_socket::set_tls()
+      void set_tls( std::shared_ptr<const tls_context> context, bool outbound_tls,
+                    const std::string& server_name = std::string() );
+      /// Whether the connection runs over TLS
+      bool is_tls();
+      /// The negotiated TLS version, empty for a plain connection
+      std::string tls_version();
+      /// connect_to() tried TLS, the peer turned out to be an old node, and the connection is plain
+      bool tls_fell_back_to_plain = false;
+
       void accept_connection();
       void connect_to(const fc::ip::endpoint& remote_endpoint, fc::optional<fc::ip::endpoint> local_endpoint = fc::optional<fc::ip::endpoint>());
 

@@ -290,6 +290,9 @@ class node_impl : public peer_connection_delegate
 
       fc::rate_limiting_group _rate_limiter;
 
+      /// TLS for P2P connections, null when TLS is off
+      std::shared_ptr<const tls_context> _tls_context;
+
       uint32_t _last_reported_number_of_connections; // number of connections last reported to the client (to avoid sending duplicate messages)
 
       bool _peer_advertising_disabled;
@@ -482,6 +485,8 @@ class node_impl : public peer_connection_delegate
       void listen_to_p2p_network();
       void connect_to_p2p_network();
       void add_node( const fc::ip::endpoint& ep );
+      void set_p2p_tls_options( const p2p_tls_options& options );
+      void set_peer_transport( const fc::ip::endpoint& ep, bool tls, const fc::optional<std::string>& server_name );
       void initiate_connect_to(const peer_connection_ptr& peer);
       void connect_to_endpoint(const fc::ip::endpoint& ep);
       void listen_on_endpoint(const fc::ip::endpoint& ep , bool wait_if_not_available);

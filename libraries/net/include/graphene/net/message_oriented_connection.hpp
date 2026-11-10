@@ -24,6 +24,7 @@
 #pragma once
 #include <fc/network/tcp_socket.hpp>
 #include <graphene/net/message.hpp>
+#include <graphene/net/stcp_socket.hpp>
 
 namespace graphene { namespace net {
 
@@ -46,6 +47,8 @@ namespace graphene { namespace net {
        message_oriented_connection(message_oriented_connection_delegate* delegate = nullptr);
        ~message_oriented_connection();
        fc::tcp_socket& get_socket();
+       /// The encrypted stream under the messages; for its TLS settings and state
+       stcp_socket&    get_stcp_socket();
 
        void accept();
        void bind(const fc::ip::endpoint& local_endpoint);
