@@ -1366,6 +1366,10 @@ namespace graphene { namespace net { namespace detail {
       if (!_hard_fork_block_numbers.empty())
         user_data["last_known_fork_block_number"] = _hard_fork_block_numbers.back();
 
+      // Lets peers connect to us over TLS right away; old nodes ignore unknown keys
+      if (_tls_context)
+        user_data["p2p_transports"] = fc::variant( std::vector<std::string>{ "tls" }, 2 );
+
       return user_data;
     }
     void node_impl::parse_hello_user_data_for_peer(peer_connection* originating_peer, const fc::variant_object& user_data)
@@ -1388,6 +1392,22 @@ namespace graphene { namespace net { namespace detail {
         originating_peer->node_id = user_data["node_id"].as<node_id_t>(1);
       if (user_data.contains("last_known_fork_block_number"))
         originating_peer->last_known_fork_block_number = user_data["last_known_fork_block_number"].as<uint32_t>(1);
+      if (user_data.contains("p2p_transports"))
+      {
+        // The peer supports TLS: connect to it over TLS from now on, even when an earlier try
+        // marked its address as an old node
+        std::vector<std::string> transports = user_data["p2p_transports"].as<std::vector<std::string>>(2);
+        fc::optional<fc::ip::endpoint> endpoint = originating_peer->get_endpoint_for_connecting();
+        if (endpoint && std::find(transports.begin(), transports.end(), "tls") != transports.end())
+        {
+          fc::optional<potential_peer_record> record = _potential_peer_db.lookup_entry_for_endpoint(*endpoint);
+          if (record && record->transport != transport_tls)
+          {
+            record->transport = transport_tls;
+            _potential_peer_db.update_entry(*record);
+          }
+        }
+      }
     }
 
     void node_impl::on_hello_message( peer_connection* originating_peer, const hello_message& hello_message_received )
@@ -3798,6 +3818,7 @@ namespace graphene { namespace net { namespace detail {
     void node_impl::accept_connection_task( peer_connection_ptr new_peer )
     {
       VERIFY_CORRECT_THREAD();
+      new_peer->set_tls( _tls_context, false );
       new_peer->accept_connection(); // this blocks until the secure connection is fully negotiated
       send_hello_message(new_peer);
     }
@@ -3897,6 +3918,18 @@ namespace graphene { namespace net { namespace detail {
 
       fc::oexception connect_failed_exception;
 
+      if (_tls_context)
+      {
+        // TLS unless the peer is known to be an old node; with "always", TLS only
+        fc::optional<potential_peer_record> peer_record = _potential_peer_db.lookup_entry_for_endpoint(remote_endpoint);
+        bool outbound_tls = _tls_context->mode() == p2p_tls_mode::always ||
+                            !peer_record || peer_record->transport != transport_plain;
+        std::string server_name = peer_record && peer_record->tls_server_name ? *peer_record->tls_server_name : std::string();
+        new_peer->set_tls(_tls_context, outbound_tls, server_name);
+      }
+      else
+        new_peer->set_tls(nullptr, false);
+
       try
       {
         new_peer->connect_to(remote_endpoint, _actual_listening_endpoint);  // blocks until the connection is established and secure connection is negotiated
@@ -3908,6 +3941,10 @@ namespace graphene { namespace net { namespace detail {
         potential_peer_record updated_peer_record = _potential_peer_db.lookup_or_create_entry_for_endpoint(remote_endpoint);
         updated_peer_record.last_connection_disposition = last_connection_handshaking_failed;
         updated_peer_record.number_of_successful_connection_attempts++;
+        if (new_peer->is_tls())
+          updated_peer_record.transport = transport_tls;
+        else if (new_peer->tls_fell_back_to_plain)
+          updated_peer_record.transport = transport_plain;
         updated_peer_record.last_seen_time = fc::time_point::now();
         _potential_peer_db.update_entry(updated_peer_record);
       }
@@ -4204,6 +4241,24 @@ namespace graphene { namespace net { namespace detail {
       trigger_p2p_network_connect_loop();
     }
 
+    void node_impl::set_p2p_tls_options( const p2p_tls_options& options )
+    {
+      VERIFY_CORRECT_THREAD();
+      _tls_context = options.mode == p2p_tls_mode::off ? nullptr : std::make_shared<const tls_context>(options);
+      ilog( "P2P TLS: ${mode}", ("mode", to_string(options.mode)) );
+    }
+
+    void node_impl::set_peer_transport( const fc::ip::endpoint& ep, bool tls, const fc::optional<std::string>& server_name )
+    {
+      VERIFY_CORRECT_THREAD();
+      potential_peer_record record = _potential_peer_db.lookup_or_create_entry_for_endpoint(ep);
+      if (tls)
+        record.transport = transport_tls;
+      if (server_name)
+        record.tls_server_name = server_name;
+      _potential_peer_db.update_entry(record);
+    }
+
     void node_impl::initiate_connect_to(const peer_connection_ptr& new_peer)
     {
       new_peer->get_socket().open();
@@ -4441,6 +4496,7 @@ namespace graphene { namespace net { namespace detail {
         peer_details["subver"] = peer->user_agent;
         peer_details["inbound"] = peer->direction == peer_connection_direction::inbound;
         peer_details["firewall_status"] = fc::variant( peer->is_firewalled, 1 );
+        peer_details["transport"] = peer->is_tls() ? peer->tls_version() : std::string("plain");
         peer_details["startingheight"] = "";
         peer_details["banscore"] = "";
         peer_details["syncnode"] = "";
@@ -4740,6 +4796,16 @@ namespace graphene { namespace net { namespace detail {
   void node::add_node( const fc::ip::endpoint& ep )
   {
     INVOKE_IN_IMPL(add_node, ep);
+  }
+
+  void node::set_p2p_tls_options( const p2p_tls_options& options )
+  {
+    INVOKE_IN_IMPL(set_p2p_tls_options, options);
+  }
+
+  void node::set_peer_transport( const fc::ip::endpoint& ep, bool tls, const fc::optional<std::string>& server_name )
+  {
+    INVOKE_IN_IMPL(set_peer_transport, ep, tls, server_name);
   }
 
   void node::connect_to_endpoint( const fc::ip::endpoint& remote_endpoint )

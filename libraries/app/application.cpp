@@ -125,46 +125,53 @@ void application_impl::reset_p2p_node(const fc::path& data_dir)
    _p2p_network->load_configuration(data_dir / "p2p");
    _p2p_network->set_node_delegate(this);
 
+   net::p2p_tls_options tls_options;
+   if( _options->count("p2p-tls") )
+      tls_options.mode = net::p2p_tls_mode_from_string( _options->at("p2p-tls").as<string>() );
+   if( _options->count("p2p-tls-cert") )
+      tls_options.certificate_file = fc::path( _options->at("p2p-tls-cert").as<string>() );
+   if( _options->count("p2p-tls-key") )
+      tls_options.private_key_file = fc::path( _options->at("p2p-tls-key").as<string>() );
+   _p2p_network->set_p2p_tls_options( tls_options );
+
+   // A seed node is host:port, optionally as tls://host:port (connect over TLS right away) and
+   // with ?sni=name (the name to send in TLS for a host given as an IP address)
+   auto add_seed_node = [this]( const string& seed ) {
+      std::vector<fc::ip::endpoint> result;
+      try {
+         seed_node_address address = parse_seed_node_address( seed );
+         std::vector<fc::ip::endpoint> endpoints = resolve_string_to_ip_endpoints( address.host_and_port );
+         for( const fc::ip::endpoint& endpoint : endpoints )
+         {
+            ilog( "Adding seed node ${endpoint}", ("endpoint", endpoint) );
+            if( address.tls || address.server_name )
+               _p2p_network->set_peer_transport( endpoint, address.tls, address.server_name );
+            _p2p_network->add_node( endpoint );
+            result.push_back( endpoint );
+         }
+      } catch( const fc::exception& e ) {
+         wlog( "caught exception ${e} while adding seed node ${endpoint}",
+                  ("e", e.to_detail_string())("endpoint", seed) );
+      }
+      return result;
+   };
+
    // Connections to --seed-node peers are opened once the P2P node is running, see below
    std::vector<fc::ip::endpoint> seed_node_endpoints;
    if( _options->count("seed-node") )
    {
-      auto seeds = _options->at("seed-node").as<vector<string>>();
-      for( const string& endpoint_string : seeds )
+      for( const string& seed : _options->at("seed-node").as<vector<string>>() )
       {
-         try {
-            std::vector<fc::ip::endpoint> endpoints = resolve_string_to_ip_endpoints(endpoint_string);
-            for (const fc::ip::endpoint& endpoint : endpoints)
-            {
-               ilog("Adding seed node ${endpoint}", ("endpoint", endpoint));
-               _p2p_network->add_node(endpoint);
-               seed_node_endpoints.push_back(endpoint);
-            }
-         } catch( const fc::exception& e ) {
-            wlog( "caught exception ${e} while adding seed node ${endpoint}",
-                     ("e", e.to_detail_string())("endpoint", endpoint_string) );
-         }
+         std::vector<fc::ip::endpoint> endpoints = add_seed_node( seed );
+         seed_node_endpoints.insert( seed_node_endpoints.end(), endpoints.begin(), endpoints.end() );
       }
    }
 
    if( _options->count("seed-nodes") )
    {
       auto seeds_str = _options->at("seed-nodes").as<string>();
-      auto seeds = fc::json::from_string(seeds_str).as<vector<string>>(2);
-      for( const string& endpoint_string : seeds )
-      {
-         try {
-            std::vector<fc::ip::endpoint> endpoints = resolve_string_to_ip_endpoints(endpoint_string);
-            for (const fc::ip::endpoint& endpoint : endpoints)
-            {
-               ilog("Adding seed node ${endpoint}", ("endpoint", endpoint));
-               _p2p_network->add_node(endpoint);
-            }
-         } catch( const fc::exception& e ) {
-            wlog( "caught exception ${e} while adding seed node ${endpoint}",
-                     ("e", e.to_detail_string())("endpoint", endpoint_string) );
-         }
-      }
+      for( const string& seed : fc::json::from_string(seeds_str).as<vector<string>>(2) )
+         add_seed_node( seed );
    }
    else
    {
@@ -172,20 +179,8 @@ void application_impl::reset_p2p_node(const fc::path& data_dir)
       vector<string> seeds = {
          #include "../egenesis/seed-nodes.txt"
       };
-      for( const string& endpoint_string : seeds )
-      {
-         try {
-            std::vector<fc::ip::endpoint> endpoints = resolve_string_to_ip_endpoints(endpoint_string);
-            for (const fc::ip::endpoint& endpoint : endpoints)
-            {
-               ilog("Adding seed node ${endpoint}", ("endpoint", endpoint));
-               _p2p_network->add_node(endpoint);
-            }
-         } catch( const fc::exception& e ) {
-            wlog( "caught exception ${e} while adding seed node ${endpoint}",
-                     ("e", e.to_detail_string())("endpoint", endpoint_string) );
-         }
-      }
+      for( const string& seed : seeds )
+         add_seed_node( seed );
    }
 
    if( _options->count("p2p-endpoint") )
@@ -214,6 +209,44 @@ void application_impl::reset_p2p_node(const fc::path& data_dir)
       }
    }
 } FC_CAPTURE_AND_RETHROW() }
+
+seed_node_address parse_seed_node_address( const std::string& seed )
+{
+   seed_node_address result;
+   std::string rest = boost::algorithm::trim_copy( seed );
+   const std::string tls_scheme = "tls://";
+   if( boost::algorithm::istarts_with( rest, tls_scheme ) )
+   {
+      result.tls = true;
+      rest = rest.substr( tls_scheme.size() );
+   }
+   std::string::size_type query_pos = rest.find( '?' );
+   if( query_pos != std::string::npos )
+   {
+      std::vector<std::string> parameters;
+      std::string query = rest.substr( query_pos + 1 );
+      boost::algorithm::split( parameters, query, boost::algorithm::is_any_of("&") );
+      for( const std::string& parameter : parameters )
+      {
+         if( boost::algorithm::istarts_with( parameter, "sni=" ) && parameter.size() > 4 )
+            result.server_name = parameter.substr( 4 );
+         else if( !parameter.empty() )
+            FC_THROW( "Unknown parameter \"${p}\" in seed node \"${seed}\"", ("p", parameter)("seed", seed) );
+      }
+      rest = rest.substr( 0, query_pos );
+   }
+   result.host_and_port = rest;
+   if( !result.server_name )
+   {
+      // A host name goes into TLS as SNI; an IP address must not (RFC 6066)
+      std::string host = rest.substr( 0, rest.find( ':' ) );
+      boost::system::error_code error;
+      boost::asio::ip::make_address_v4( host, error );
+      if( error && !host.empty() )
+         result.server_name = host;
+   }
+   return result;
+}
 
 std::vector<fc::ip::endpoint> application_impl::resolve_string_to_ip_endpoints(const std::string& endpoint_string)
 {
@@ -1050,6 +1083,14 @@ void application::set_program_options(boost::program_options::options_descriptio
           "P2P nodes to connect to on startup (may specify multiple times)")
          ("seed-nodes", bpo::value<string>()->composing(),
           "JSON array of P2P nodes to connect to on startup")
+         ("p2p-tls", bpo::value<string>()->default_value("auto"),
+          "TLS for P2P connections: auto (accept TLS and plain; try TLS on outbound connections and "
+          "fall back to plain for old nodes), always (outbound connections over TLS only) or off. "
+          "A seed node given as tls://host:port is connected over TLS right away; "
+          "tls://1.2.3.4:1776?sni=example.org sends that name in TLS")
+         ("p2p-tls-cert", bpo::value<string>(),
+          "Certificate (chain) in PEM for the server side of P2P TLS; self-signed if not set")
+         ("p2p-tls-key", bpo::value<string>(), "Private key in PEM for p2p-tls-cert")
          ("checkpoint,c", bpo::value<vector<string>>()->composing(),
           "Pairs of [BLOCK_NUM,BLOCK_ID] that should be enforced as checkpoints.")
          ("rpc-endpoint", bpo::value<string>()->implicit_value("127.0.0.1:8090"),

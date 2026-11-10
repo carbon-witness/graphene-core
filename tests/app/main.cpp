@@ -471,3 +471,164 @@ BOOST_AUTO_TEST_CASE(application_impl_breakout) {
    graphene::net::item_id id;
    BOOST_CHECK(impl.has_item(id));
 }
+
+/// Options of a test node for the P2P tests: no default seed nodes, a fixed listening endpoint
+static bpo::variables_map p2p_test_config( const boost::filesystem::path& genesis_file, const std::string& endpoint,
+                                           const std::vector<std::string>& seed_nodes,
+                                           const std::string& tls_mode = "auto" )
+{
+   bpo::variables_map cfg;
+   cfg.emplace("p2p-endpoint", bpo::variable_value(endpoint, false));
+   cfg.emplace("genesis-json", bpo::variable_value(genesis_file, false));
+   cfg.emplace("seed-nodes", bpo::variable_value(std::string("[]"), false));
+   cfg.emplace("p2p-tls", bpo::variable_value(tls_mode, false));
+   if( !seed_nodes.empty() )
+      cfg.emplace("seed-node", bpo::variable_value(seed_nodes, false));
+   return cfg;
+}
+
+BOOST_AUTO_TEST_CASE( seed_node_address_parsing )
+{
+   using graphene::app::detail::parse_seed_node_address;
+
+   auto plain_ip = parse_seed_node_address( "1.2.3.4:1776" );
+   BOOST_CHECK_EQUAL( plain_ip.host_and_port, "1.2.3.4:1776" );
+   BOOST_CHECK( !plain_ip.tls );
+   BOOST_CHECK( !plain_ip.server_name ); // no SNI for an IP address
+
+   auto plain_name = parse_seed_node_address( " seed.example.org:1776 " );
+   BOOST_CHECK_EQUAL( plain_name.host_and_port, "seed.example.org:1776" );
+   BOOST_CHECK( !plain_name.tls );
+   BOOST_REQUIRE( plain_name.server_name );
+   BOOST_CHECK_EQUAL( *plain_name.server_name, "seed.example.org" );
+
+   auto tls_ip = parse_seed_node_address( "TLS://1.2.3.4:1776" );
+   BOOST_CHECK_EQUAL( tls_ip.host_and_port, "1.2.3.4:1776" );
+   BOOST_CHECK( tls_ip.tls );
+   BOOST_CHECK( !tls_ip.server_name );
+
+   auto tls_sni = parse_seed_node_address( "tls://1.2.3.4:1776?sni=example.org" );
+   BOOST_CHECK_EQUAL( tls_sni.host_and_port, "1.2.3.4:1776" );
+   BOOST_CHECK( tls_sni.tls );
+   BOOST_REQUIRE( tls_sni.server_name );
+   BOOST_CHECK_EQUAL( *tls_sni.server_name, "example.org" );
+
+   BOOST_CHECK_THROW( parse_seed_node_address( "tls://1.2.3.4:1776?foo=bar" ), fc::exception );
+}
+
+/// Starts a node listening on 127.0.0.1:port, connecting to the given seed nodes
+struct p2p_test_node
+{
+   fc::temp_directory            dir{ graphene::utilities::temp_directory_path() };
+   bpo::variables_map            config; // application keeps a pointer to it: declared before app
+   graphene::app::application    app;
+
+   /// Listens on a port the OS picks: fixed ports may be taken on a CI machine
+   p2p_test_node( const boost::filesystem::path& genesis_file,
+                  const std::vector<std::string>& seed_nodes, const std::string& tls_mode ) :
+      config( p2p_test_config( genesis_file, "127.0.0.1:0", seed_nodes, tls_mode ) )
+   {
+      app.startup_plugins();
+      app.initialize( dir.path(), config );
+      app.startup();
+   }
+
+   uint32_t connections() { return app.p2p_node()->get_connection_count(); }
+
+   /// "127.0.0.1:port" this node listens on
+   std::string address() { return std::string( app.p2p_node()->get_actual_listening_endpoint() ); }
+
+   /// "plain", or the TLS version, of the only connection
+   std::string transport()
+   {
+      auto peers = app.p2p_node()->get_connected_peers();
+      BOOST_REQUIRE_EQUAL( peers.size(), 1u );
+      return peers.front().info["transport"].as_string();
+   }
+
+   fc::optional<net::potential_peer_record> peer_record( const std::string& endpoint )
+   {
+      for( const auto& record : app.p2p_node()->get_potential_peers() )
+         if( std::string(record.endpoint) == endpoint )
+            return record;
+      return {};
+   }
+};
+
+/// Two new nodes connect over TLS: the client tries it, the server tells it from the first byte
+BOOST_AUTO_TEST_CASE( p2p_tls_between_new_nodes )
+{
+   try {
+      fc::temp_directory genesis_dir( graphene::utilities::temp_directory_path() );
+      const boost::filesystem::path genesis_file = create_genesis_file( genesis_dir );
+
+      p2p_test_node server( genesis_file, {}, "auto" );
+      p2p_test_node client( genesis_file, { server.address() }, "auto" );
+      BOOST_REQUIRE( wait_for( [&] { return server.connections() == 1u && client.connections() == 1u; } ) );
+
+      BOOST_CHECK_NE( server.transport(), "plain" );
+      BOOST_CHECK_NE( client.transport(), "plain" );
+      BOOST_CHECK_EQUAL( client.transport().substr(0, 3), "TLS" );
+      auto record = client.peer_record( server.address() );
+      BOOST_REQUIRE( record );
+      BOOST_CHECK( record->transport == net::transport_tls );
+   } catch( fc::exception& e ) {
+      BOOST_FAIL( e.to_detail_string() );
+   }
+}
+
+/// An old client (TLS off behaves like one) connects to a new node plainly on the same port
+BOOST_AUTO_TEST_CASE( p2p_tls_old_client_to_new_server )
+{
+   try {
+      fc::temp_directory genesis_dir( graphene::utilities::temp_directory_path() );
+      const boost::filesystem::path genesis_file = create_genesis_file( genesis_dir );
+
+      p2p_test_node server( genesis_file, {}, "auto" );
+      p2p_test_node client( genesis_file, { server.address() }, "off" );
+      BOOST_REQUIRE( wait_for( [&] { return server.connections() == 1u && client.connections() == 1u; } ) );
+
+      BOOST_CHECK_EQUAL( server.transport(), "plain" );
+      BOOST_CHECK_EQUAL( client.transport(), "plain" );
+   } catch( fc::exception& e ) {
+      BOOST_FAIL( e.to_detail_string() );
+   }
+}
+
+/// A new client tries TLS with an old node, sees the plain protocol in the answer, reconnects
+/// plainly and remembers the node as plain
+BOOST_AUTO_TEST_CASE( p2p_tls_new_client_falls_back_for_old_server )
+{
+   try {
+      fc::temp_directory genesis_dir( graphene::utilities::temp_directory_path() );
+      const boost::filesystem::path genesis_file = create_genesis_file( genesis_dir );
+
+      p2p_test_node server( genesis_file, {}, "off" );
+      p2p_test_node client( genesis_file, { server.address() }, "auto" );
+      BOOST_REQUIRE( wait_for( [&] { return server.connections() == 1u && client.connections() == 1u; } ) );
+
+      BOOST_CHECK_EQUAL( server.transport(), "plain" );
+      BOOST_CHECK_EQUAL( client.transport(), "plain" );
+      auto record = client.peer_record( server.address() );
+      BOOST_REQUIRE( record );
+      BOOST_CHECK( record->transport == net::transport_plain );
+   } catch( fc::exception& e ) {
+      BOOST_FAIL( e.to_detail_string() );
+   }
+}
+
+/// With TLS "always" a client does not fall back to the plain protocol
+BOOST_AUTO_TEST_CASE( p2p_tls_always_does_not_fall_back )
+{
+   try {
+      fc::temp_directory genesis_dir( graphene::utilities::temp_directory_path() );
+      const boost::filesystem::path genesis_file = create_genesis_file( genesis_dir );
+
+      p2p_test_node server( genesis_file, {}, "off" );
+      p2p_test_node client( genesis_file, { server.address() }, "always" );
+      BOOST_CHECK( !wait_for( [&] { return client.connections() > 0u; }, fc::seconds(5) ) );
+      BOOST_CHECK_EQUAL( server.connections(), 0u );
+   } catch( fc::exception& e ) {
+      BOOST_FAIL( e.to_detail_string() );
+   }
+}

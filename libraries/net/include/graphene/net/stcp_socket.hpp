@@ -26,6 +26,12 @@
 #include <fc/crypto/aes.hpp>
 #include <fc/crypto/elliptic.hpp>
 
+#include <graphene/net/tls.hpp>
+
+#include <memory>
+#include <string>
+#include <vector>
+
 namespace graphene { namespace net {
 
 /**
@@ -38,6 +44,22 @@ class stcp_socket : public virtual fc::iostream
     stcp_socket();
     ~stcp_socket();
     fc::tcp_socket&  get_socket() { return _sock; }
+
+    /**
+     * TLS settings for the next accept() or connect_to(); without a context (or with TLS off)
+     * the socket speaks the plain protocol only.
+     * @param outbound_tls connect_to() starts TLS; otherwise it connects plain
+     * @param server_name  SNI for an outbound TLS connection, empty for none
+     */
+    void             set_tls( std::shared_ptr<const tls_context> context, bool outbound_tls,
+                              const std::string& server_name = std::string() );
+    /// Whether the connection runs over TLS (known after accept() or connect_to())
+    bool             is_tls() const { return bool(_tls); }
+    /// The negotiated TLS version, empty for a plain connection
+    std::string      tls_version() const { return _tls ? _tls->version() : std::string(); }
+
+    /// Accepts the plain protocol, and TLS when the TLS context allows it: the first byte the
+    /// client sends tells them apart
     void             accept();
 
     void             connect_to( const fc::ip::endpoint& remote_endpoint );
@@ -58,6 +80,18 @@ class stcp_socket : public virtual fc::iostream
     fc::sha512       get_shared_secret() const { return _shared_secret; }
   private:
     void do_key_exchange();
+
+    // The connection under the stcp encryption: TLS, or the TCP socket itself
+    size_t raw_readsome( const std::shared_ptr<char>& buffer, size_t length, size_t offset );
+    void   raw_read( const std::shared_ptr<char>& buffer, size_t length, size_t offset = 0 );
+    void   raw_write( const std::shared_ptr<const char>& buffer, size_t length );
+
+    std::shared_ptr<const tls_context> _tls_context;
+    bool                               _outbound_tls = false;
+    std::string                        _tls_server_name;
+    std::unique_ptr<tls_connection>    _tls;
+    /// Bytes read from a plain client to detect the protocol, served before the socket
+    std::vector<char>                  _unread_input;
 
     fc::sha512           _shared_secret;
     fc::ecc::private_key _priv_key;
