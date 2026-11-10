@@ -358,6 +358,61 @@ BOOST_AUTO_TEST_CASE( two_node_network )
    }
 }
 
+/// Reconnecting from the same listening port right after a disconnect.
+/// The node binds its outbound connections to its own listening port. The side that closes a
+/// connection keeps it in TIME_WAIT for a minute, and until then connect() between the same two
+/// endpoints fails with "Cannot assign requested address". The node has to fall back to a port the
+/// OS picks instead of giving up on the peer.
+BOOST_AUTO_TEST_CASE( reconnect_from_same_port_after_disconnect )
+{
+   using namespace graphene::chain;
+   using namespace graphene::app;
+   try {
+      fc::temp_directory app1_dir( graphene::utilities::temp_directory_path() );
+      const boost::filesystem::path genesis_file = create_genesis_file( app1_dir );
+
+      auto make_config = [&genesis_file]( const string& endpoint, const vector<string>& seed_nodes ) {
+         bpo::variables_map cfg;
+         cfg.emplace("p2p-endpoint", bpo::variable_value(endpoint, false));
+         cfg.emplace("genesis-json", bpo::variable_value(genesis_file, false));
+         cfg.emplace("seed-nodes", bpo::variable_value(string("[]"), false));
+         if( !seed_nodes.empty() )
+            cfg.emplace("seed-node", bpo::variable_value(seed_nodes, false));
+         return cfg;
+      };
+
+      graphene::app::application app1;
+      app1.startup_plugins();
+      app1.initialize(app1_dir.path(), make_config("127.0.0.1:3940", {}));
+      app1.startup();
+
+      {
+         BOOST_TEST_MESSAGE( "Connecting app2 from 127.0.0.1:3941" );
+         fc::temp_directory app2_dir( graphene::utilities::temp_directory_path() );
+         graphene::app::application app2;
+         app2.startup_plugins();
+         app2.initialize(app2_dir.path(), make_config("127.0.0.1:3941", {"127.0.0.1:3940"}));
+         app2.startup();
+         BOOST_REQUIRE( wait_for( [&app1] { return app1.p2p_node()->get_connection_count() == 1u; } ) );
+         BOOST_TEST_MESSAGE( "Shutting app2 down: it closes first, so 3941 -> 3940 stays in TIME_WAIT" );
+      }
+      BOOST_REQUIRE( wait_for( [&app1] { return app1.p2p_node()->get_connection_count() == 0u; } ) );
+
+      BOOST_TEST_MESSAGE( "Connecting app3 from the same 127.0.0.1:3941" );
+      fc::temp_directory app3_dir( graphene::utilities::temp_directory_path() );
+      graphene::app::application app3;
+      app3.startup_plugins();
+      app3.initialize(app3_dir.path(), make_config("127.0.0.1:3941", {"127.0.0.1:3940"}));
+      app3.startup();
+      // Well under the one-minute TIME_WAIT and the 30 s peer retry time
+      BOOST_CHECK( wait_for( [&app1] { return app1.p2p_node()->get_connection_count() == 1u; } ) );
+      BOOST_CHECK_EQUAL( app3.p2p_node()->get_connection_count(), 1u );
+   } catch( fc::exception& e ) {
+      edump((e.to_detail_string()));
+      throw;
+   }
+}
+
 // a contrived example to test the breaking out of application_impl to a header file
 
 #include "../../libraries/app/application_impl.hxx"
