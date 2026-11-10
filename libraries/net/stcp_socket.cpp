@@ -33,6 +33,7 @@
 #include <fc/exception/exception.hpp>
 
 #include <graphene/net/stcp_socket.hpp>
+#include <graphene/net/exceptions.hpp>
 
 namespace graphene { namespace net {
 
@@ -55,8 +56,8 @@ void stcp_socket::do_key_exchange()
   fc::ecc::public_key_data s = pub.serialize();
   std::shared_ptr<char> serialized_key_buffer(new char[sizeof(fc::ecc::public_key_data)], [](char* p){ delete[] p; });
   memcpy(serialized_key_buffer.get(), (char*)&s, sizeof(fc::ecc::public_key_data));
-  _sock.write( serialized_key_buffer, sizeof(fc::ecc::public_key_data) );
-  _sock.read( serialized_key_buffer, sizeof(fc::ecc::public_key_data) );
+  raw_write( serialized_key_buffer, sizeof(fc::ecc::public_key_data) );
+  raw_read( serialized_key_buffer, sizeof(fc::ecc::public_key_data) );
   fc::ecc::public_key_data rpub;
   memcpy((char*)&rpub, serialized_key_buffer.get(), sizeof(fc::ecc::public_key_data));
 
@@ -69,10 +70,59 @@ void stcp_socket::do_key_exchange()
 }
 
 
+void stcp_socket::set_tls( std::shared_ptr<const tls_context> context, bool outbound_tls,
+                           const std::string& server_name )
+{
+  if( context && context->mode() == p2p_tls_mode::off )
+    context.reset();
+  _tls_context = std::move(context);
+  _outbound_tls = _tls_context && outbound_tls;
+  _tls_server_name = server_name;
+  _tls.reset();
+  _unread_input.clear();
+}
+
 void stcp_socket::connect_to( const fc::ip::endpoint& remote_endpoint )
 {
   _sock.connect_to( remote_endpoint );
+  if( _outbound_tls )
+  {
+    _tls.reset( new tls_connection( *_tls_context, _sock, tls_connection::role::client, _tls_server_name ) );
+    _tls->handshake();
+  }
   do_key_exchange();
+}
+
+size_t stcp_socket::raw_readsome( const std::shared_ptr<char>& buffer, size_t length, size_t offset )
+{
+  if( _tls )
+    return _tls->readsome( buffer.get() + offset, length );
+  if( !_unread_input.empty() )
+  {
+    size_t bytes = std::min( length, _unread_input.size() );
+    memcpy( buffer.get() + offset, _unread_input.data(), bytes );
+    _unread_input.erase( _unread_input.begin(), _unread_input.begin() + bytes );
+    return bytes;
+  }
+  return _sock.readsome( buffer, length, offset );
+}
+
+void stcp_socket::raw_read( const std::shared_ptr<char>& buffer, size_t length, size_t offset )
+{
+  while( length > 0 )
+  {
+    size_t bytes = raw_readsome( buffer, length, offset );
+    offset += bytes;
+    length -= bytes;
+  }
+}
+
+void stcp_socket::raw_write( const std::shared_ptr<const char>& buffer, size_t length )
+{
+  if( _tls )
+    _tls->write( buffer.get(), length );
+  else
+    _sock.write( buffer, length );
 }
 
 void stcp_socket::bind( const fc::ip::endpoint& local_endpoint )
@@ -106,10 +156,10 @@ size_t stcp_socket::readsome( char* buffer, size_t len )
 
     len = std::min<size_t>(read_buffer_length, len);
 
-    size_t s = _sock.readsome( _read_buffer, len, 0 );
+    size_t s = raw_readsome( _read_buffer, len, 0 );
     if( s % 16 ) 
     {
-      _sock.read(_read_buffer, 16 - (s%16), s);
+      raw_read(_read_buffer, 16 - (s%16), s);
       s += 16-(s%16);
     }
     _recv_aes.decode( _read_buffer.get(), s, buffer );
@@ -154,7 +204,7 @@ size_t stcp_socket::writesome( const char* buffer, size_t len )
      */
     uint32_t ciphertext_len = _send_aes.encode( buffer, len, _write_buffer.get() );
     assert(ciphertext_len == len);
-    _sock.write( _write_buffer, ciphertext_len );
+    raw_write( _write_buffer, ciphertext_len );
     return ciphertext_len;
 } FC_RETHROW_EXCEPTIONS( warn, "", ("len",len) ) }
 
@@ -179,6 +229,25 @@ void stcp_socket::close()
 
 void stcp_socket::accept()
 {
+  if( _tls_context )
+  {
+    // A plain client starts with its compressed public key, a TLS client with a ClientHello.
+    // Old clients write their key without waiting for ours, so reading first cannot deadlock.
+    std::shared_ptr<char> first_byte( new char[1], [](char* p){ delete[] p; } );
+    _sock.read( first_byte, 1 );
+    const char byte = first_byte.get()[0];
+    if( byte == tls_handshake_record_type )
+    {
+      _tls.reset( new tls_connection( *_tls_context, _sock, tls_connection::role::server ) );
+      _tls->feed( &byte, 1 );
+      _tls->handshake();
+    }
+    else if( byte == 0x02 || byte == 0x03 )
+      _unread_input.push_back( byte );
+    else
+      FC_THROW_EXCEPTION( net_exception, "Unknown protocol: the peer started with byte ${b}",
+                          ("b", fc::to_hex( &byte, 1 )) );
+  }
   do_key_exchange();
 }
 

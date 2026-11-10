@@ -73,6 +73,7 @@ namespace graphene { namespace net {
       void start_read_loop();
     public:
       fc::tcp_socket& get_socket();
+      stcp_socket& get_stcp_socket() { return _sock; }
       void accept();
       void connect_to(const fc::ip::endpoint& remote_endpoint);
       void bind(const fc::ip::endpoint& local_endpoint);
@@ -366,6 +367,11 @@ namespace graphene { namespace net {
   fc::tcp_socket& message_oriented_connection::get_socket()
   {
     return my->get_socket();
+  }
+
+  stcp_socket& message_oriented_connection::get_stcp_socket()
+  {
+    return my->get_stcp_socket();
   }
 
   void message_oriented_connection::accept()

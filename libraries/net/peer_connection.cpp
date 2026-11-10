@@ -254,31 +254,50 @@ namespace graphene { namespace net
           }
         }
         negotiation_status = connection_negotiation_status::connecting;
-        try
+        bool retried_without_bind = false;
+        for( ;; )
         {
-          _message_connection.connect_to( remote_endpoint );
-        }
-        catch ( const fc::canceled_exception& )
-        {
-          throw;
-        }
-        catch ( const fc::exception& except )
-        {
-          // A successful bind() does not mean connect() can use that local endpoint: while an
-          // earlier connection between the same two endpoints still exists, connect() fails with
-          // "Cannot assign requested address" (EADDRNOTAVAIL). When the network goes down the old
-          // connections stay in FIN_WAIT for minutes (nobody answers the FIN), so the node could
-          // not reconnect to any of the peers it had just lost all at once.
-          // If the TCP connection was never established, retry once from a port the OS picks.
-          // Failures after the TCP connect (in the key exchange) are not retried.
-          if( !bound_to_local_endpoint || tcp_connection_established() )
+          try
+          {
+            _message_connection.connect_to( remote_endpoint );
+            break;
+          }
+          catch ( const fc::canceled_exception& )
+          {
             throw;
-          wlog( "Failed to connect to ${remote_endpoint} from local endpoint ${local_endpoint}, retrying from an OS-selected endpoint: ${except}",
-                ("remote_endpoint", remote_endpoint)("local_endpoint", *local_endpoint)("except", except.to_string()) );
+          }
+          catch ( const p2p_tls_not_supported& )
+          {
+            // An old node answered our ClientHello with its stcp key. With TLS on "auto" talk
+            // to it the old way: on a new connection, since the old node already took the
+            // ClientHello for the start of a key. The node remembers this for the next time.
+            if( tls_fell_back_to_plain || !_tls_context || _tls_context->mode() != p2p_tls_mode::automatic )
+              throw;
+            dlog( "Peer ${remote_endpoint} does not support TLS, reconnecting without it", ("remote_endpoint", remote_endpoint) );
+            tls_fell_back_to_plain = true;
+            _message_connection.get_stcp_socket().set_tls( _tls_context, false );
+          }
+          catch ( const fc::exception& except )
+          {
+            // A successful bind() does not mean connect() can use that local endpoint: while an
+            // earlier connection between the same two endpoints still exists, connect() fails with
+            // "Cannot assign requested address" (EADDRNOTAVAIL). When the network goes down the old
+            // connections stay in FIN_WAIT for minutes (nobody answers the FIN), so the node could
+            // not reconnect to any of the peers it had just lost all at once.
+            // If the TCP connection was never established, retry once from a port the OS picks.
+            // Failures after the TCP connect (in the key exchange) are not retried.
+            if( !bound_to_local_endpoint || retried_without_bind || tcp_connection_established() )
+              throw;
+            wlog( "Failed to connect to ${remote_endpoint} from local endpoint ${local_endpoint}, retrying from an OS-selected endpoint: ${except}",
+                  ("remote_endpoint", remote_endpoint)("local_endpoint", *local_endpoint)("except", except.to_string()) );
+            retried_without_bind = true;
+          }
+          // A new, unbound socket: the old one is bound, or is the closed side of a connection
+          // whose local endpoint stays in TIME_WAIT
           fc::tcp_socket& socket = _message_connection.get_socket();
           socket.close();
           socket.open();
-          _message_connection.connect_to( remote_endpoint );
+          bound_to_local_endpoint = false;
         }
         negotiation_status = connection_negotiation_status::connected;
         their_state = their_connection_state::just_connected;
@@ -291,6 +310,24 @@ namespace graphene { namespace net
         throw;
       }
     } // connect_to()
+
+    void peer_connection::set_tls( std::shared_ptr<const tls_context> context, bool outbound_tls,
+                                   const std::string& server_name )
+    {
+      _tls_context = context;
+      tls_fell_back_to_plain = false;
+      _message_connection.get_stcp_socket().set_tls( std::move(context), outbound_tls, server_name );
+    }
+
+    bool peer_connection::is_tls()
+    {
+      return _message_connection.get_stcp_socket().is_tls();
+    }
+
+    std::string peer_connection::tls_version()
+    {
+      return _message_connection.get_stcp_socket().tls_version();
+    }
 
     bool peer_connection::tcp_connection_established()
     {
