@@ -1,0 +1,99 @@
+name: tests
+
+# Builds and runs the test suites; the docker and windows workflows build only the
+# binaries. app_test and cli_test run on every push to a work branch and on pull
+# requests. chain_test takes much longer to build and run: it runs on manual starts
+# (Run workflow, with "chain_test" checked) and for release tags.
+on:
+  push:
+    branches: ['release/**', 'fix/**', 'feature/**', 'ci/**', 'test/**']
+    tags: ['graphene-*']
+    paths-ignore:
+      - '**.md'
+      - 'images/**'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'images/**'
+  workflow_dispatch:
+    inputs:
+      chain_test:
+        description: Also build and run chain_test
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    # The same system as the release image: GCC 15, Boost 1.90, OpenSSL 3.5
+    container: ubuntu:26.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 2G
+      CHAIN_TEST: ${{ inputs.chain_test || startsWith(github.ref, 'refs/tags/graphene-') }}
+    steps:
+      # git before checkout, or actions/checkout falls back to a download without submodules
+      - name: Packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential cmake git autoconf automake libtool pkg-config ccache mold \
+            libboost-all-dev libssl-dev libreadline-dev zlib1g-dev libbz2-dev \
+            libcurl4-openssl-dev libzstd-dev libncurses-dev libicu-dev liblzma-dev \
+            ca-certificates zstd
+
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      # The workspace belongs to the runner user, not to root in the container: without this
+      # git refuses the repository and the build version becomes NOTFOUND
+      - name: Trust the workspace
+        run: git config --global --add safe.directory '*'
+
+      - uses: actions/cache@v6
+        with:
+          path: .ccache
+          key: tests-ccache-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            tests-ccache-${{ github.ref_name }}-
+            tests-ccache-
+
+      # -g: the fc stack trace tests and readable traces from a crashing test need it
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_LINKER_TYPE=MOLD
+
+      - name: Build
+        run: |
+          ccache -z
+          targets="app_test cli_test"
+          [ "$CHAIN_TEST" = true ] && targets="$targets chain_test"
+          cmake --build build --parallel "$(nproc)" --target $targets
+          ccache -s
+
+      - name: app_test
+        timeout-minutes: 20
+        run: ./build/tests/app_test --log_level=message --report_level=short
+
+      - name: cli_test
+        if: success() || failure()
+        timeout-minutes: 30
+        run: ./build/tests/cli_test --log_level=message --report_level=short
+
+      - name: chain_test
+        if: (success() || failure()) && env.CHAIN_TEST == 'true'
+        timeout-minutes: 120
+        run: ./build/tests/chain_test --report_level=short
