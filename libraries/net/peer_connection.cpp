@@ -265,9 +265,10 @@ namespace graphene { namespace net
         catch ( const fc::exception& except )
         {
           // A successful bind() does not mean connect() can use that local endpoint: while an
-          // earlier connection between the same two endpoints is still in TIME_WAIT, connect()
-          // fails with "Cannot assign requested address" (EADDRNOTAVAIL). That happens after
-          // every disconnect, so the node could not reconnect to any peer it had just lost.
+          // earlier connection between the same two endpoints still exists, connect() fails with
+          // "Cannot assign requested address" (EADDRNOTAVAIL). When the network goes down the old
+          // connections stay in FIN_WAIT for minutes (nobody answers the FIN), so the node could
+          // not reconnect to any of the peers it had just lost all at once.
           // If the TCP connection was never established, retry once from a port the OS picks.
           // Failures after the TCP connect (in the key exchange) are not retried.
           if( !bound_to_local_endpoint || tcp_connection_established() )
