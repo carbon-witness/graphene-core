@@ -381,17 +381,20 @@ BOOST_AUTO_TEST_CASE( reconnect_from_same_port_after_disconnect )
          return cfg;
       };
 
+      // application keeps a pointer to its options: they have to outlive it
+      const bpo::variables_map cfg1 = make_config("127.0.0.1:3940", {});
       graphene::app::application app1;
       app1.startup_plugins();
-      app1.initialize(app1_dir.path(), make_config("127.0.0.1:3940", {}));
+      app1.initialize(app1_dir.path(), cfg1);
       app1.startup();
 
       {
          BOOST_TEST_MESSAGE( "Connecting app2 from 127.0.0.1:3941" );
          fc::temp_directory app2_dir( graphene::utilities::temp_directory_path() );
+         const bpo::variables_map cfg2 = make_config("127.0.0.1:3941", {"127.0.0.1:3940"});
          graphene::app::application app2;
          app2.startup_plugins();
-         app2.initialize(app2_dir.path(), make_config("127.0.0.1:3941", {"127.0.0.1:3940"}));
+         app2.initialize(app2_dir.path(), cfg2);
          app2.startup();
          BOOST_REQUIRE( wait_for( [&app1] { return app1.p2p_node()->get_connection_count() == 1u; } ) );
          BOOST_TEST_MESSAGE( "Shutting app2 down: it closes first, so 3941 -> 3940 stays in TIME_WAIT" );
@@ -400,9 +403,10 @@ BOOST_AUTO_TEST_CASE( reconnect_from_same_port_after_disconnect )
 
       BOOST_TEST_MESSAGE( "Connecting app3 from the same 127.0.0.1:3941" );
       fc::temp_directory app3_dir( graphene::utilities::temp_directory_path() );
+      const bpo::variables_map cfg3 = make_config("127.0.0.1:3941", {"127.0.0.1:3940"});
       graphene::app::application app3;
       app3.startup_plugins();
-      app3.initialize(app3_dir.path(), make_config("127.0.0.1:3941", {"127.0.0.1:3940"}));
+      app3.initialize(app3_dir.path(), cfg3);
       app3.startup();
       // Well under the one-minute TIME_WAIT and the 30 s peer retry time
       BOOST_CHECK( wait_for( [&app1] { return app1.p2p_node()->get_connection_count() == 1u; } ) );
