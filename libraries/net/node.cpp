@@ -418,7 +418,12 @@ namespace graphene { namespace net { namespace detail {
                  iter != _potential_peer_db.end() && is_wanting_new_connections();
                  ++iter)
             {
-              fc::microseconds delay_until_retry = fc::seconds((iter->number_of_failed_connection_attempts + 1) * _peer_connection_retry_timeout);
+              // the delay grows with each failed attempt, up to a cap, so that a peer we lost together
+              // with all the others (our own network went down for a while) is retried within minutes,
+              // not hours, once the network is back
+              uint32_t retry_multiplier = std::min<uint32_t>(iter->number_of_failed_connection_attempts + 1,
+                                                             GRAPHENE_NET_MAX_PEER_CONNECTION_RETRY_MULTIPLIER);
+              fc::microseconds delay_until_retry = fc::seconds(retry_multiplier * _peer_connection_retry_timeout);
 
               if (!is_connection_to_endpoint_in_progress(iter->endpoint) &&
                   ((iter->last_connection_disposition != last_connection_failed &&
@@ -1718,6 +1723,7 @@ namespace graphene { namespace net { namespace detail {
             if (updated_peer_record)
             {
               updated_peer_record->last_connection_disposition = last_connection_succeeded;
+              updated_peer_record->number_of_failed_connection_attempts = 0;
               _potential_peer_db.update_entry(*updated_peer_record);
             }
           }
@@ -1837,6 +1843,7 @@ namespace graphene { namespace net { namespace detail {
           // mark the connection as successful in the database
           potential_peer_record updated_peer_record = _potential_peer_db.lookup_or_create_entry_for_endpoint(*inbound_endpoint);
           updated_peer_record.last_connection_disposition = last_connection_succeeded;
+          updated_peer_record.number_of_failed_connection_attempts = 0;
           _potential_peer_db.update_entry(updated_peer_record);
         }
 
