@@ -514,6 +514,37 @@ BOOST_AUTO_TEST_CASE( seed_node_address_parsing )
    BOOST_CHECK_EQUAL( *tls_sni.server_name, "example.org" );
 
    BOOST_CHECK_THROW( parse_seed_node_address( "tls://1.2.3.4:1776?foo=bar" ), fc::exception );
+
+   // IPv6: the address in brackets, never sent as SNI
+   auto plain_v6 = parse_seed_node_address( "[2a09:5302:ffff::d5a]:1776" );
+   BOOST_CHECK_EQUAL( plain_v6.host_and_port, "[2a09:5302:ffff::d5a]:1776" );
+   BOOST_CHECK( !plain_v6.tls );
+   BOOST_CHECK( !plain_v6.server_name );
+
+   auto tls_v6 = parse_seed_node_address( "tls://[::1]:1776" );
+   BOOST_CHECK_EQUAL( tls_v6.host_and_port, "[::1]:1776" );
+   BOOST_CHECK( tls_v6.tls );
+   BOOST_CHECK( !tls_v6.server_name );
+
+   auto tls_v6_sni = parse_seed_node_address( "tls://[2a09:5302:ffff::d5a]:1776?sni=example.org" );
+   BOOST_CHECK_EQUAL( tls_v6_sni.host_and_port, "[2a09:5302:ffff::d5a]:1776" );
+   BOOST_REQUIRE( tls_v6_sni.server_name );
+   BOOST_CHECK_EQUAL( *tls_v6_sni.server_name, "example.org" );
+
+   auto v6_name = parse_seed_node_address( "ipv6seed.graphene.carbon-witness.net:1776" );
+   BOOST_REQUIRE( v6_name.server_name );
+   BOOST_CHECK_EQUAL( *v6_name.server_name, "ipv6seed.graphene.carbon-witness.net" );
+}
+
+BOOST_AUTO_TEST_CASE( host_and_port_splitting )
+{
+   using graphene::app::detail::split_host_and_port;
+   BOOST_CHECK( split_host_and_port( "1.2.3.4:1776" ) == std::make_pair( std::string("1.2.3.4"), std::string("1776") ) );
+   BOOST_CHECK( split_host_and_port( "seed.example.org:1776" ) == std::make_pair( std::string("seed.example.org"), std::string("1776") ) );
+   BOOST_CHECK( split_host_and_port( "[2a09::d5a]:1776" ) == std::make_pair( std::string("2a09::d5a"), std::string("1776") ) );
+   BOOST_CHECK_THROW( split_host_and_port( "2a09::d5a:1776" ), fc::exception );
+   BOOST_CHECK_THROW( split_host_and_port( "[2a09::d5a]1776" ), fc::exception );
+   BOOST_CHECK_THROW( split_host_and_port( "1.2.3.4" ), fc::exception );
 }
 
 /// Starts a node listening on 127.0.0.1:port, connecting to the given seed nodes
