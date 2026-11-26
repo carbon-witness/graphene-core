@@ -186,6 +186,12 @@ class node_impl : public peer_connection_delegate
       firewalled_state     _is_firewalled;
       /// if we're behind NAT, our listening endpoint address will appear different to the rest of the world.  store it here.
       fc::optional<fc::ip::any_endpoint> _publicly_visible_listening_endpoint;
+      /// the endpoints we tell peers to connect to ("listen_endpoints" in the hello), and when
+      /// they were found
+      std::vector<fc::ip::any_endpoint> _advertised_listen_endpoints;
+      fc::time_point _advertised_listen_endpoints_time;
+      /// false: IPv6 addresses are not advertised (--p2p-advertise-v6=false); outbound IPv6 still works
+      bool _advertise_ipv6 = true;
       fc::time_point       _last_firewall_check_message_sent;
 
       /// used by the task that manages connecting to peers
@@ -381,6 +387,7 @@ class node_impl : public peer_connection_delegate
       void fetch_next_batch_of_item_ids_from_peer( peer_connection* peer, bool reset_fork_tracking_data_for_peer = false );
 
       fc::variant_object generate_hello_user_data();
+      const std::vector<fc::ip::any_endpoint>& get_advertised_listen_endpoints();
       void parse_hello_user_data_for_peer( peer_connection* originating_peer, const fc::variant_object& user_data );
 
       void on_message( peer_connection* originating_peer,

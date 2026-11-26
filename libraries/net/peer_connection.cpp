@@ -605,6 +605,11 @@ namespace graphene { namespace net
       // peer can only send 0.0.0.0 there.
       if (direction == peer_connection_direction::outbound && _remote_endpoint)
         return _remote_endpoint;
+      // a listening endpoint the peer declared at the address it connected from
+      if (_remote_endpoint)
+        for (const fc::ip::any_endpoint& endpoint : listen_endpoints)
+          if (endpoint.get_address() == _remote_endpoint->get_address())
+            return endpoint;
       // an unspecified address is what an IPv6 address becomes in the hello of the old format:
       // an endpoint 0.0.0.0 in the peer database would make the node connect to itself
       if (inbound_port && !inbound_address.is_unspecified())

@@ -213,6 +213,9 @@ namespace graphene { namespace net
       fc::ip::any_address inbound_address;
       uint16_t inbound_port = 0;
       uint16_t outbound_port = 0;
+      /// the endpoints the peer accepts connections on, IPv4 and IPv6, from "listen_endpoints"
+      /// in the user data of its hello (new nodes only)
+      std::vector<fc::ip::any_endpoint> listen_endpoints;
       /// @}
 
       typedef std::unordered_map<item_id, fc::time_point> item_to_time_map_type;

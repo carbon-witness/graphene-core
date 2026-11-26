@@ -72,6 +72,7 @@
 #include <fc/network/ip.hpp>
 
 #include <graphene/net/node.hpp>
+#include <fc/network/local_address.hpp>
 #include <graphene/net/peer_database.hpp>
 #include <graphene/net/peer_connection.hpp>
 #include <graphene/net/stcp_socket.hpp>
@@ -142,6 +143,42 @@ namespace graphene { namespace net {
         const fc::optional<fc::ip::address> legacy = a.to_legacy();
         return legacy ? *legacy : fc::ip::address();
       }
+
+      // On a wildcard address (0.0.0.0 or [::]) listens on [::], which takes IPv4 connections
+      // too, and falls back to 0.0.0.0 on a system without IPv6. A specific address is used as
+      // given.
+      void listen_on( fc::tcp_server& server, const fc::ip::any_endpoint& endpoint, bool reuse_address )
+      {
+        if( !endpoint.get_address().is_unspecified() )
+        {
+          if( reuse_address )
+            server.set_reuse_address();
+          server.listen( endpoint );
+          return;
+        }
+        try
+        {
+          if( reuse_address )
+            server.set_reuse_address();
+          server.listen( fc::ip::any_endpoint( fc::ip::any_address::v6_any(), endpoint.port() ) );
+          return;
+        }
+        catch( const fc::exception& e )
+        {
+          if( endpoint.is_v6() )
+            throw;
+          wlog( "unable to listen on [::]:${port}, listening on IPv4 only: ${e}",
+                ("port", endpoint.port())("e", e.to_string()) );
+          server.close();
+        }
+        if( reuse_address )
+          server.set_reuse_address();
+        server.listen( endpoint.port() );
+      }
+
+      // Addresses that only pick a route for local_address_towards(); nothing is sent there
+      const fc::ip::any_address route_probe_v4( "192.0.2.1" );
+      const fc::ip::any_address route_probe_v6( "2001:db8::1" );
     }
 
     namespace bmi = boost::multi_index;
@@ -1387,7 +1424,59 @@ namespace graphene { namespace net { namespace detail {
       if (_tls_context)
         user_data["p2p_transports"] = fc::variant( std::vector<std::string>{ "tls" }, 2 );
 
+      // The endpoints to connect to us at, IPv6 included: the fields of the hello itself hold
+      // one IPv4 address
+      const std::vector<fc::ip::any_endpoint>& listen_endpoints = get_advertised_listen_endpoints();
+      if (!listen_endpoints.empty())
+      {
+        std::vector<std::string> strings;
+        for (const fc::ip::any_endpoint& endpoint : listen_endpoints)
+          strings.push_back(endpoint.to_string());
+        user_data["listen_endpoints"] = fc::variant( strings, 2 );
+      }
+
       return user_data;
+    }
+
+    const std::vector<fc::ip::any_endpoint>& node_impl::get_advertised_listen_endpoints()
+    {
+      VERIFY_CORRECT_THREAD();
+      const fc::time_point now = fc::time_point::now();
+      if (now - _advertised_listen_endpoints_time < fc::minutes(1))
+        return _advertised_listen_endpoints;
+      _advertised_listen_endpoints_time = now;
+      _advertised_listen_endpoints.clear();
+      if (!_node_configuration.accept_incoming_connections || _actual_listening_endpoint.port() == 0)
+        return _advertised_listen_endpoints;
+
+      const uint16_t port = _actual_listening_endpoint.port();
+      const fc::ip::any_address& listening_address = _actual_listening_endpoint.get_address();
+      if (!listening_address.is_unspecified())
+      {
+        // a specific address, as the operator gave it
+        if (listening_address.is_v4() || _advertise_ipv6)
+          _advertised_listen_endpoints.push_back(_actual_listening_endpoint);
+        return _advertised_listen_endpoints;
+      }
+
+      // IPv4: the public endpoint the firewall check found (we may be behind NAT), or our
+      // address if it is public
+      if (_is_firewalled == firewalled_state::not_firewalled && _publicly_visible_listening_endpoint)
+        _advertised_listen_endpoints.push_back(*_publicly_visible_listening_endpoint);
+      else
+      {
+        fc::optional<fc::ip::any_address> v4 = fc::local_address_towards(route_probe_v4);
+        if (v4 && v4->is_public())
+          _advertised_listen_endpoints.push_back(fc::ip::any_endpoint(*v4, port));
+      }
+      // IPv6, if the listener takes it: there is no NAT, our address is the one to connect to
+      if (_advertise_ipv6 && listening_address.is_v6())
+      {
+        fc::optional<fc::ip::any_address> v6 = fc::local_address_towards(route_probe_v6);
+        if (v6 && v6->is_v6() && v6->is_public())
+          _advertised_listen_endpoints.push_back(fc::ip::any_endpoint(*v6, port));
+      }
+      return _advertised_listen_endpoints;
     }
     void node_impl::parse_hello_user_data_for_peer(peer_connection* originating_peer, const fc::variant_object& user_data)
     {
@@ -1409,6 +1498,33 @@ namespace graphene { namespace net { namespace detail {
         originating_peer->node_id = user_data["node_id"].as<node_id_t>(1);
       if (user_data.contains("last_known_fork_block_number"))
         originating_peer->last_known_fork_block_number = user_data["last_known_fork_block_number"].as<uint32_t>(1);
+      if (user_data.contains("listen_endpoints"))
+      {
+        originating_peer->listen_endpoints.clear();
+        try
+        {
+          for (const std::string& s : user_data["listen_endpoints"].as<std::vector<std::string>>(2))
+          {
+            if (originating_peer->listen_endpoints.size() >= GRAPHENE_NET_MAX_LISTEN_ENDPOINTS)
+              break;
+            try
+            {
+              fc::ip::any_endpoint endpoint = fc::ip::any_endpoint::from_string(s);
+              if (endpoint.port() != 0 && !endpoint.get_address().is_unspecified() &&
+                  !endpoint.get_address().is_multicast())
+                originating_peer->listen_endpoints.push_back(endpoint);
+            }
+            catch (const fc::exception&)
+            {
+              dlog("ignoring a bad listen endpoint ${s} of peer ${peer}", ("s", s)("peer", originating_peer->get_remote_endpoint()));
+            }
+          }
+        }
+        catch (const fc::exception&)
+        {
+          dlog("ignoring bad listen_endpoints of peer ${peer}", ("peer", originating_peer->get_remote_endpoint()));
+        }
+      }
       if (user_data.contains("p2p_transports"))
       {
         // The peer supports TLS: connect to it over TLS from now on, even when an earlier try
@@ -1577,11 +1693,22 @@ namespace graphene { namespace net { namespace detail {
           // in the hello message, the peer sent us the IP address and port it thought it was connecting from.
           // If they match the IP and port we see, we assume that they're actually on the internet and they're not
           // firewalled.
+          //
+          // A new node also lists the endpoints it listens on ("listen_endpoints"), IPv6 among them:
+          // the address field of the hello holds IPv4 only. A listed endpoint at the address we
+          // see, with the port we see being the one the peer says it connects from, counts the same.
           fc::ip::any_endpoint peers_actual_outbound_endpoint = originating_peer->get_socket().remote_any_endpoint();
-          if( peers_actual_outbound_endpoint.get_address() == originating_peer->inbound_address &&
+          fc::optional<fc::ip::any_endpoint> declared_listen_endpoint;
+          for (const fc::ip::any_endpoint& endpoint : originating_peer->listen_endpoints)
+            if (endpoint.get_address() == peers_actual_outbound_endpoint.get_address())
+            {
+              declared_listen_endpoint = endpoint;
+              break;
+            }
+          if( (declared_listen_endpoint || peers_actual_outbound_endpoint.get_address() == originating_peer->inbound_address) &&
               peers_actual_outbound_endpoint.port() == originating_peer->outbound_port )
           {
-            if( originating_peer->inbound_port == 0 )
+            if( !declared_listen_endpoint && originating_peer->inbound_port == 0 )
             {
               dlog( "peer does not appear to be firewalled, but they did not give an inbound port so I'm treating them as if they are." );
               originating_peer->is_firewalled = firewalled_state::firewalled;
@@ -1589,7 +1716,8 @@ namespace graphene { namespace net { namespace detail {
             else
             {
               // peer is not firewalled, add it to our database
-              fc::ip::any_endpoint peers_inbound_endpoint(originating_peer->inbound_address, originating_peer->inbound_port);
+              fc::ip::any_endpoint peers_inbound_endpoint = declared_listen_endpoint ? *declared_listen_endpoint :
+                  fc::ip::any_endpoint(originating_peer->inbound_address, originating_peer->inbound_port);
               potential_peer_record updated_peer_record = _potential_peer_db.lookup_or_create_entry_for_endpoint(peers_inbound_endpoint);
               _potential_peer_db.update_entry(updated_peer_record);
               originating_peer->is_firewalled = firewalled_state::not_firewalled;
@@ -3344,11 +3472,13 @@ namespace graphene { namespace net { namespace detail {
         {
           _is_firewalled = firewalled_state::not_firewalled;
           _publicly_visible_listening_endpoint = fc::ip::any_endpoint(check_firewall_reply_message_received.endpoint_checked);
+          _advertised_listen_endpoints_time = fc::time_point(); // advertise the new endpoint
         }
         else if (check_firewall_reply_message_received.result == firewall_check_result::unable_to_connect)
         {
           _is_firewalled = firewalled_state::firewalled;
           _publicly_visible_listening_endpoint = fc::optional<fc::ip::any_endpoint>();
+          _advertised_listen_endpoints_time = fc::time_point();
         }
         delete originating_peer->firewall_check_state;
         originating_peer->firewall_check_state = nullptr;
@@ -4167,10 +4297,7 @@ namespace graphene { namespace net { namespace detail {
           try
           {
             fc::tcp_server temporary_server;
-            if( !listen_endpoint.get_address().is_unspecified() )
-              temporary_server.listen( listen_endpoint );
-            else
-              temporary_server.listen( listen_endpoint.port() );
+            listen_on( temporary_server, listen_endpoint, false );
             break;
           }
           catch ( const fc::exception&)
@@ -4216,13 +4343,9 @@ namespace graphene { namespace net { namespace detail {
         // (it may not be due to ip address, but we'll detect that in the next step)
       }
 
-      _tcp_server.set_reuse_address();
       try
       {
-        if( !listen_endpoint.get_address().is_unspecified() )
-          _tcp_server.listen( listen_endpoint );
-        else
-          _tcp_server.listen( listen_endpoint.port() );
+        listen_on( _tcp_server, listen_endpoint, true );
         _actual_listening_endpoint = _tcp_server.get_local_any_endpoint();
         ilog( "listening for connections on endpoint ${endpoint} (our first choice)",
               ( "endpoint", _actual_listening_endpoint ) );

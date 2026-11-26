@@ -44,6 +44,9 @@
  */
 #define GRAPHENE_NET_MAX_PEER_CONNECTION_RETRY_MULTIPLIER    11
 
+/// at most this many endpoints of a peer are taken from "listen_endpoints" in its hello
+#define GRAPHENE_NET_MAX_LISTEN_ENDPOINTS                    8
+
 /**
  * AFter trying all peers, how long to wait before we check to
  * see if there are peers we can try again.
