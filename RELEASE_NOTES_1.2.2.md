@@ -254,7 +254,7 @@ the host network, the bridge network with and without IPv6, and Docker Desktop.
 
 ## Commits
 
-Since 1.2.1 (the `graphene` branch), in order.
+Since 1.2.1 (the `graphene` branch), in order; the commit that last updated this list is not in it.
 
 **graphene-core**
 - [`881b8eae`](https://github.com/carbon-witness/graphene-core/commit/881b8eaee37503fb51b2bb565de6a2ad0812e7ce) docs: what graphene-node-gui.lock holds, in the Windows GUI guide
@@ -286,6 +286,8 @@ Since 1.2.1 (the `graphene` branch), in order.
 - [`6e82b10b`](https://github.com/carbon-witness/graphene-core/commit/6e82b10ba26e0559943410fb9c31b2d309e16ae6) p2p: no loopback endpoints in the addresses for a peer elsewhere
 - [`3c091a08`](https://github.com/carbon-witness/graphene-core/commit/3c091a08b63fb673a6ad559f289ea8e73d3db4be) p2p: an inbound IPv6 connection from the internet shows our endpoint can be reached
 - [`1bbfd7bc`](https://github.com/carbon-witness/graphene-core/commit/1bbfd7bceb864935cb259b5f941091d7e03f0286) Version 1.2.2
+- [`cf374600`](https://github.com/carbon-witness/graphene-core/commit/cf37460062cbd9105c2166e5bf38107ad765f796) docs: release notes for 1.2.2 (draft)
+- [`1f06e1af`](https://github.com/carbon-witness/graphene-core/commit/1f06e1afffbbeecaadccba12e254b8fe661a09c7) docs: README for 1.2.2, with a section on the P2P network
 
 **graphene-fc**
 - [`57dc6c6`](https://github.com/carbon-witness/graphene-fc/commit/57dc6c638bef576040cb9a90cff1093677415b7c) ip: addresses and endpoints of either family, IPv4 or IPv6
