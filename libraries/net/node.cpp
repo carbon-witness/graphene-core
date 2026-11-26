@@ -468,10 +468,20 @@ namespace graphene { namespace net { namespace detail {
             bool initiated_connection_this_pass = false;
             _potential_peer_database_updated = false;
 
+            // IPv6 addresses first, then IPv4: a node with both is connected over IPv6
+            const bool ipv6_usable = is_ipv6_usable();
+            for (int pass = 0; pass < 2; ++pass)
             for (peer_database::iterator iter = _potential_peer_db.begin();
                  iter != _potential_peer_db.end() && is_wanting_new_connections();
                  ++iter)
             {
+              if (iter->endpoint.is_v6() != (pass == 0))
+                continue;
+              if (iter->endpoint.is_v6() && !ipv6_usable)
+                continue;
+              if (is_connected_at_alternate_endpoint(*iter))
+                continue;
+
               // the delay grows with each failed attempt, up to a cap, so that a peer we lost together
               // with all the others (our own network went down for a while) is retried within minutes,
               // not hours, once the network is back
@@ -1530,16 +1540,20 @@ namespace graphene { namespace net { namespace detail {
         // The peer supports TLS: connect to it over TLS from now on, even when an earlier try
         // marked its address as an old node
         std::vector<std::string> transports = user_data["p2p_transports"].as<std::vector<std::string>>(2);
+        std::vector<fc::ip::any_endpoint> endpoints = originating_peer->listen_endpoints;
         fc::optional<fc::ip::any_endpoint> endpoint = originating_peer->get_endpoint_for_connecting();
-        if (endpoint && std::find(transports.begin(), transports.end(), "tls") != transports.end())
-        {
-          fc::optional<potential_peer_record> record = _potential_peer_db.lookup_entry_for_endpoint(*endpoint);
-          if (record && record->transport != transport_tls)
+        if (endpoint)
+          endpoints.push_back(*endpoint);
+        if (std::find(transports.begin(), transports.end(), "tls") != transports.end())
+          for (const fc::ip::any_endpoint& peer_endpoint : endpoints)
           {
-            record->transport = transport_tls;
-            _potential_peer_db.update_entry(*record);
+            fc::optional<potential_peer_record> record = _potential_peer_db.lookup_entry_for_endpoint(peer_endpoint);
+            if (record && record->transport != transport_tls)
+            {
+              record->transport = transport_tls;
+              _potential_peer_db.update_entry(*record);
+            }
           }
-        }
       }
     }
 
@@ -1731,6 +1745,8 @@ namespace graphene { namespace net { namespace detail {
             originating_peer->is_firewalled = firewalled_state::firewalled;
           }
 
+          remember_listen_endpoints(originating_peer);
+
           if (!is_accepting_new_connections())
           {
             connection_rejected_message connection_rejected(_user_agent_string, core_protocol_version,
@@ -1804,6 +1820,12 @@ namespace graphene { namespace net { namespace detail {
           _potential_peer_db.erase(originating_peer->get_socket().remote_any_endpoint());
           move_peer_to_closing_list(originating_peer->shared_from_this());
           originating_peer->close_connection();
+        }
+        else if (connection_rejected_message_received.reason_code == rejection_reason_code::already_connected)
+        {
+          // we are connected to that node at another address (IPv4 and IPv6, or from both
+          // sides at once): nothing is wrong with this address, it is not held back
+          dlog("peer ${peer} is already connected to us at another address", ("peer", originating_peer->get_remote_endpoint()));
         }
         else
         {
@@ -3975,6 +3997,10 @@ namespace graphene { namespace net { namespace detail {
       VERIFY_CORRECT_THREAD();
       new_peer->set_tls( _tls_context, false );
       new_peer->accept_connection(); // this blocks until the secure connection is fully negotiated
+      // a peer reaching us over IPv6 shows that our IPv6 works
+      fc::optional<fc::ip::any_endpoint> remote_endpoint = new_peer->get_remote_endpoint();
+      if (remote_endpoint && remote_endpoint->is_v6())
+        note_connection_result(*remote_endpoint, true);
       send_hello_message(new_peer);
     }
 
@@ -4099,6 +4125,8 @@ namespace graphene { namespace net { namespace detail {
 
         // we connected to the peer.  guess they're not firewalled....
         new_peer->is_firewalled = firewalled_state::not_firewalled;
+        if (!new_peer->performing_firewall_check())
+          note_connection_result(remote_endpoint, true);
 
         // connection succeeded, we've started handshaking.  record that in our database
         potential_peer_record updated_peer_record = _potential_peer_db.lookup_or_create_entry_for_endpoint(remote_endpoint);
@@ -4118,6 +4146,7 @@ namespace graphene { namespace net { namespace detail {
 
       if (connect_failed_exception && !new_peer->performing_firewall_check())
       {
+        note_connection_result(remote_endpoint, false);
         // connection failed.  record that in our database
         potential_peer_record updated_peer_record = _potential_peer_db.lookup_or_create_entry_for_endpoint(remote_endpoint);
         updated_peer_record.last_connection_disposition = last_connection_failed;
@@ -4447,6 +4476,121 @@ namespace graphene { namespace net { namespace detail {
       peer_connection_ptr new_peer(peer_connection::make_shared(this));
       new_peer->set_remote_endpoint(remote_endpoint);
       initiate_connect_to(new_peer);
+    }
+
+    bool node_impl::is_ipv6_usable()
+    {
+      VERIFY_CORRECT_THREAD();
+      const fc::time_point now = fc::time_point::now();
+      if (now - _ipv6_address_checked >= fc::seconds(GRAPHENE_NET_IPV6_ADDRESS_CHECK_SECONDS))
+      {
+        _ipv6_address_checked = now;
+        fc::optional<fc::ip::any_address> v6 = fc::local_address_towards(route_probe_v6);
+        const bool ipv6_address = v6 && v6->is_v6() && v6->is_public();
+        if (ipv6_address != _ipv6_address)
+        {
+          ilog("IPv6 ${state}", ("state", ipv6_address ? "available: " + v6->to_string() :
+                                                         std::string("unavailable: no global IPv6 address")));
+          // a new network (another Wi-Fi, IPv6 turned on): forget the failures of the old one
+          _ipv6_disabled_until = fc::time_point();
+          _ipv6_failed_endpoints.clear();
+        }
+        _ipv6_address = ipv6_address;
+      }
+      return _ipv6_address && now >= _ipv6_disabled_until;
+    }
+
+    void node_impl::note_connection_result(const fc::ip::any_endpoint& remote_endpoint, bool success)
+    {
+      VERIFY_CORRECT_THREAD();
+      const fc::time_point now = fc::time_point::now();
+      if (remote_endpoint.is_v4())
+      {
+        if (success)
+          _last_ipv4_success = now;
+        return;
+      }
+      if (success)
+      {
+        if (now < _ipv6_disabled_until)
+          ilog("IPv6 works again (${peer})", ("peer", remote_endpoint));
+        _ipv6_failed_endpoints.clear();
+        _ipv6_disabled_until = fc::time_point();
+        return;
+      }
+      // A peer can be down; several in a row, with IPv4 working, means our IPv6 is broken
+      // (an address but no route, a router that drops it). The set is kept after the pause, so
+      // that one more failure then starts the next pause.
+      _ipv6_failed_endpoints.insert(remote_endpoint);
+      if (_ipv6_failed_endpoints.size() >= GRAPHENE_NET_IPV6_FAILURES_TO_DISABLE &&
+          _last_ipv4_success != fc::time_point() &&
+          now - _last_ipv4_success < fc::seconds(GRAPHENE_NET_IPV6_RETRY_SECONDS))
+      {
+        if (now >= _ipv6_disabled_until)
+          wlog("connections over IPv6 failed to ${count} peers while IPv4 works, not using IPv6 for ${seconds} s",
+               ("count", _ipv6_failed_endpoints.size())("seconds", GRAPHENE_NET_IPV6_RETRY_SECONDS));
+        _ipv6_disabled_until = now + fc::seconds(GRAPHENE_NET_IPV6_RETRY_SECONDS);
+      }
+    }
+
+    peer_connection_ptr node_impl::get_connection_to_peer_at(const fc::ip::any_endpoint& endpoint)
+    {
+      VERIFY_CORRECT_THREAD();
+      for (const auto* connections : { &_active_connections, &_handshaking_connections })
+        for (const peer_connection_ptr& peer : *connections)
+        {
+          if (peer->get_remote_endpoint() && *peer->get_remote_endpoint() == endpoint)
+            return peer;
+          fc::optional<fc::ip::any_endpoint> listening = peer->get_endpoint_for_connecting();
+          if (listening && *listening == endpoint)
+            return peer;
+        }
+      return peer_connection_ptr();
+    }
+
+    bool node_impl::is_connected_at_alternate_endpoint(const potential_peer_record& record)
+    {
+      VERIFY_CORRECT_THREAD();
+      const fc::time_point now = fc::time_point::now();
+      for (const fc::ip::any_endpoint& alternate : record.alternate_endpoints)
+      {
+        peer_connection_ptr peer = get_connection_to_peer_at(alternate);
+        if (!peer)
+          continue;
+        // An IPv4 address waits for an IPv6 connection to the same node only for a while: a
+        // connection still not up then is likely to fail (happy eyeballs, RFC 8305)
+        if (record.endpoint.is_v4() && alternate.is_v6() &&
+            peer->negotiation_status == peer_connection::connection_negotiation_status::connecting &&
+            now - peer->connection_initiation_time > fc::milliseconds(GRAPHENE_NET_IPV6_FALLBACK_DELAY_MS))
+          continue;
+        return true;
+      }
+      return false;
+    }
+
+    void node_impl::remember_listen_endpoints(const peer_connection* peer)
+    {
+      VERIFY_CORRECT_THREAD();
+      // The endpoints a node lists in its own hello belong together: the connect loop then picks
+      // one of them (IPv6 first) instead of connecting to the node twice. An endpoint that does
+      // not work fails and waits like any other.
+      const std::vector<fc::ip::any_endpoint>& endpoints = peer->listen_endpoints;
+      for (const fc::ip::any_endpoint& endpoint : endpoints)
+      {
+        if (endpoint == _actual_listening_endpoint ||
+            std::find(_advertised_listen_endpoints.begin(), _advertised_listen_endpoints.end(), endpoint) != _advertised_listen_endpoints.end())
+          continue; // our own
+        std::vector<fc::ip::any_endpoint> others;
+        for (const fc::ip::any_endpoint& other : endpoints)
+          if (other != endpoint)
+            others.push_back(other);
+        potential_peer_record record = _potential_peer_db.lookup_or_create_entry_for_endpoint(endpoint);
+        if (record.alternate_endpoints != others || record.last_seen_time == fc::time_point_sec())
+        {
+          record.alternate_endpoints = others;
+          _potential_peer_db.update_entry(record);
+        }
+      }
     }
 
     peer_connection_ptr node_impl::get_connection_to_endpoint( const fc::ip::any_endpoint& remote_endpoint )
