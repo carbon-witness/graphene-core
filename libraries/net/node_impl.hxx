@@ -287,6 +287,13 @@ class node_impl : public peer_connection_delegate
 
       fc::tcp_server       _tcp_server;
       fc::future<void>     _accept_loop_complete;
+      /// listeners besides _tcp_server (add_listen_endpoint), with their accept loops
+      std::vector<fc::ip::any_endpoint>             _extra_listen_endpoints;
+      std::vector<std::shared_ptr<fc::tcp_server>>  _extra_tcp_servers;
+      std::vector<fc::ip::any_endpoint>             _extra_actual_listening_endpoints;
+      std::vector<fc::future<void>>                 _extra_accept_loops;
+      /// set_advertised_endpoints(): advertised as given instead of found automatically
+      std::vector<fc::ip::any_endpoint>             _configured_advertised_endpoints;
 
       /** Stores all connections which have not yet finished key exchange or are still sending initial handshaking messages
        * back and forth (not yet ready to initiate syncing) */
@@ -500,6 +507,13 @@ class node_impl : public peer_connection_delegate
 
       void accept_connection_task(peer_connection_ptr new_peer);
       void accept_loop();
+      void accept_loop(fc::tcp_server& server, const std::function<bool()>& canceled);
+      /// the local endpoint to bind an outbound connection to: a listening endpoint of the family of the peer
+      fc::optional<fc::ip::any_endpoint> local_endpoint_for(const fc::ip::any_endpoint& remote_endpoint) const;
+      std::vector<fc::ip::any_endpoint> get_listening_endpoints() const;
+      void add_listen_endpoint(const fc::ip::any_endpoint& ep);
+      void set_advertised_endpoints(const std::vector<fc::ip::any_endpoint>& endpoints);
+      void set_advertise_ipv6(bool advertise);
       void send_hello_message(const peer_connection_ptr& peer);
       void connect_to_task(peer_connection_ptr new_peer, const fc::ip::any_endpoint& remote_endpoint);
       bool is_connection_to_endpoint_in_progress(const fc::ip::any_endpoint& remote_endpoint);

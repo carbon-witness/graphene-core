@@ -39,6 +39,7 @@
 #include <fc/thread/thread.hpp>
 #include <fc/network/tcp_socket.hpp>
 #include <fc/network/any_ip.hpp>
+#include <fc/network/local_address.hpp>
 #include <fc/log/appender.hpp>
 #include <fc/log/logger.hpp>
 
@@ -392,17 +393,16 @@ static std::string non_loopback_local_address()
 /// A socket from the same local endpoint to the same peer, held open by the test, stands in
 /// for the earlier connection. The addresses are not loopback, where Linux treats connections
 /// more leniently.
-BOOST_AUTO_TEST_CASE( reconnect_from_same_port_after_disconnect )
+/// The reconnect test below for one address, IPv4 or IPv6, and a pair of ports
+static void check_reconnect_from_same_port( const std::string& address_string, uint16_t port1, uint16_t port2 )
 {
    using namespace graphene::chain;
    using namespace graphene::app;
    try {
-      const std::string host = non_loopback_local_address();
-      if( host.empty() )
-      {
-         BOOST_TEST_MESSAGE( "No non-loopback address, skipping" );
-         return;
-      }
+      const auto address = boost::asio::ip::make_address( address_string );
+      const std::string host = address.is_v6() ? "[" + address_string + "]" : address_string;
+      const std::string endpoint1 = host + ":" + std::to_string( port1 );
+      const std::string endpoint2 = host + ":" + std::to_string( port2 );
       fc::temp_directory app1_dir( graphene::utilities::temp_directory_path() );
       const boost::filesystem::path genesis_file = create_genesis_file( app1_dir );
 
@@ -417,7 +417,7 @@ BOOST_AUTO_TEST_CASE( reconnect_from_same_port_after_disconnect )
       };
 
       // application keeps a pointer to its options: they have to outlive it
-      const bpo::variables_map cfg1 = make_config(host + ":3940", {});
+      const bpo::variables_map cfg1 = make_config(endpoint1, {});
       graphene::app::application app1;
       app1.startup_plugins();
       app1.initialize(app1_dir.path(), cfg1);
@@ -429,32 +429,54 @@ BOOST_AUTO_TEST_CASE( reconnect_from_same_port_after_disconnect )
       // app2 without seed nodes first: its listener has to own the port before another socket
       // binds to it (the node itself binds its outbound sockets the same way)
       fc::temp_directory app2_dir( graphene::utilities::temp_directory_path() );
-      const bpo::variables_map cfg2 = make_config(host + ":3941", {});
+      const bpo::variables_map cfg2 = make_config(endpoint2, {});
       graphene::app::application app2;
       app2.startup_plugins();
       app2.initialize(app2_dir.path(), cfg2);
       app2.startup();
 
-      BOOST_TEST_MESSAGE( "An earlier connection " + host + ":3941 -> " + host + ":3940 that is not closed" );
+      BOOST_TEST_MESSAGE( "An earlier connection " + endpoint2 + " -> " + endpoint1 + " that is not closed" );
       boost::asio::io_context io;
       boost::asio::ip::tcp::socket earlier_connection( io );
-      earlier_connection.open( boost::asio::ip::tcp::v4() );
+      earlier_connection.open( address.is_v6() ? boost::asio::ip::tcp::v6() : boost::asio::ip::tcp::v4() );
       earlier_connection.set_option( boost::asio::socket_base::reuse_address(true) );
 #ifdef SO_REUSEPORT
       earlier_connection.set_option( boost::asio::detail::socket_option::boolean<SOL_SOCKET, SO_REUSEPORT>(true) );
 #endif
-      const auto address = boost::asio::ip::make_address( host );
-      earlier_connection.bind( boost::asio::ip::tcp::endpoint( address, 3941 ) );
-      earlier_connection.connect( boost::asio::ip::tcp::endpoint( address, 3940 ) );
+      earlier_connection.bind( boost::asio::ip::tcp::endpoint( address, port2 ) );
+      earlier_connection.connect( boost::asio::ip::tcp::endpoint( address, port1 ) );
 
-      BOOST_TEST_MESSAGE( "app2 connects to app1 from " + host + ":3941" );
-      app2.p2p_node()->connect_to_endpoint( fc::ip::endpoint::from_string( host + ":3940" ) );
+      BOOST_TEST_MESSAGE( "app2 connects to app1 from " + endpoint2 );
+      app2.p2p_node()->connect_to_endpoint( fc::ip::any_endpoint::from_string( endpoint1 ) );
       // Well under the retry delay after a failed attempt
       BOOST_CHECK( wait_for( [&] { return app2.p2p_node()->get_connection_count() == 1u; }, fc::seconds(15) ) );
       earlier_connection.close();
    } catch( fc::exception& e ) {
       BOOST_FAIL( e.to_detail_string() );
    }
+}
+
+BOOST_AUTO_TEST_CASE( reconnect_from_same_port_after_disconnect )
+{
+   const std::string host = non_loopback_local_address();
+   if( host.empty() )
+   {
+      BOOST_TEST_MESSAGE( "No non-loopback address, skipping" );
+      return;
+   }
+   check_reconnect_from_same_port( host, 3940, 3941 );
+}
+
+/// The same over IPv6, on a global address of this machine (not the loopback)
+BOOST_AUTO_TEST_CASE( reconnect_from_same_port_after_disconnect_ipv6 )
+{
+   const auto v6 = fc::local_address_towards( fc::ip::any_address( "2001:db8::1" ) );
+   if( !v6 || !v6->is_v6() || !v6->is_public() )
+   {
+      BOOST_TEST_MESSAGE( "No global IPv6 address, skipping" );
+      return;
+   }
+   check_reconnect_from_same_port( v6->to_string(), 3942, 3943 );
 }
 
 // a contrived example to test the breaking out of application_impl to a header file
@@ -561,8 +583,14 @@ struct p2p_test_node
    /// Listens on a port the OS picks: fixed ports may be taken on a CI machine
    p2p_test_node( const boost::filesystem::path& genesis_file,
                   const std::vector<std::string>& seed_nodes, const std::string& tls_mode,
-                  const std::string& listen = "127.0.0.1:0" ) :
-      config( p2p_test_config( genesis_file, listen, seed_nodes, tls_mode ) )
+                  const std::string& listen = "127.0.0.1:0",
+                  const std::function<void(bpo::variables_map&)>& more_options = {} ) :
+      config( [&]() {
+         bpo::variables_map cfg = p2p_test_config( genesis_file, listen, seed_nodes, tls_mode );
+         if( more_options )
+            more_options( cfg );
+         return cfg;
+      }() )
    {
       app.startup_plugins();
       app.initialize( dir.path(), config );
@@ -822,6 +850,67 @@ BOOST_AUTO_TEST_CASE( p2p_ipv6_address_exchange )
       BOOST_CHECK( wait_for( [&] { return a.peer_record( c.address() ).valid(); } ) );
       // and it can connect there
       BOOST_CHECK( wait_for( [&] { return a.connections() == 2u; } ) );
+   } catch( fc::exception& e ) {
+      BOOST_FAIL( e.to_detail_string() );
+   }
+}
+
+/// --p2p-endpoint given twice: an IPv4 and an IPv6 listener on different ports, both advertised
+BOOST_AUTO_TEST_CASE( p2p_two_listen_endpoints )
+{
+   if( !ipv6_loopback_available() )
+   {
+      BOOST_TEST_MESSAGE( "no IPv6 on this system, p2p_two_listen_endpoints skipped" );
+      return;
+   }
+   try {
+      fc::temp_directory genesis_dir( graphene::utilities::temp_directory_path() );
+      const boost::filesystem::path genesis_file = create_genesis_file( genesis_dir );
+
+      p2p_test_node server( genesis_file, {}, "auto", "127.0.0.1:0", []( bpo::variables_map& cfg ) {
+         cfg.erase( "p2p-endpoint" );
+         cfg.emplace( "p2p-endpoint", bpo::variable_value( std::vector<std::string>{ "127.0.0.1:0", "[::1]:0" }, false ) );
+      } );
+      const auto listening = server.app.p2p_node()->get_listening_endpoints();
+      BOOST_REQUIRE_EQUAL( listening.size(), 2u );
+      BOOST_CHECK( listening[0].is_v4() );
+      BOOST_CHECK( listening[1].is_v6() );
+
+      p2p_test_node client4( genesis_file, { listening[0].to_string() }, "auto", "127.0.0.1:0" );
+      p2p_test_node client6( genesis_file, { listening[1].to_string() }, "auto", "[::1]:0" );
+      BOOST_REQUIRE( wait_for( [&] { return server.connections() == 2u; } ) );
+      BOOST_CHECK( server.peer_hosts() == ( std::set<std::string>{ "127.0.0.1", "::1" } ) );
+
+      const auto advertised = server.app.p2p_node()->network_get_info()["advertised_endpoints"].as<std::vector<std::string>>( 2 );
+      BOOST_CHECK( advertised == ( std::vector<std::string>{ listening[0].to_string(), listening[1].to_string() } ) );
+   } catch( fc::exception& e ) {
+      BOOST_FAIL( e.to_detail_string() );
+   }
+}
+
+/// --p2p-advertise replaces the endpoints found automatically, --p2p-advertise-v6=false leaves
+/// out the IPv6 ones; the peer gets them in the hello
+BOOST_AUTO_TEST_CASE( p2p_advertise_options )
+{
+   try {
+      fc::temp_directory genesis_dir( graphene::utilities::temp_directory_path() );
+      const boost::filesystem::path genesis_file = create_genesis_file( genesis_dir );
+
+      p2p_test_node server( genesis_file, {}, "auto", "127.0.0.1:0", []( bpo::variables_map& cfg ) {
+         cfg.emplace( "p2p-advertise", bpo::variable_value(
+               std::vector<std::string>{ "[2001:db8::5]:1776", "198.51.100.7:1776" }, false ) );
+         cfg.emplace( "p2p-advertise-v6", bpo::variable_value( false, false ) );
+      } );
+      const auto advertised = server.app.p2p_node()->network_get_info()["advertised_endpoints"].as<std::vector<std::string>>( 2 );
+      BOOST_CHECK( advertised == std::vector<std::string>{ "198.51.100.7:1776" } );
+
+      p2p_test_node client( genesis_file, { server.address() }, "auto" );
+      BOOST_REQUIRE( wait_for( [&] { return client.connections() == 1u; } ) );
+      const auto peers = client.app.p2p_node()->get_connected_peers();
+      BOOST_REQUIRE_EQUAL( peers.size(), 1u );
+      BOOST_REQUIRE( peers.front().info.contains( "listen_endpoints" ) );
+      BOOST_CHECK( peers.front().info["listen_endpoints"].as<std::vector<std::string>>( 2 ) ==
+                   std::vector<std::string>{ "198.51.100.7:1776" } );
    } catch( fc::exception& e ) {
       BOOST_FAIL( e.to_detail_string() );
    }
