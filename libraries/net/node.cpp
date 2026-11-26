@@ -2022,7 +2022,19 @@ namespace graphene { namespace net { namespace detail {
             _potential_peer_db.update_entry(*updated_peer_record);
           }
 
-          reply.addresses.emplace_back(address_info(legacy_endpoint(*active_peer->get_remote_endpoint()),
+          // address_info holds IPv4: a peer we are connected to over IPv6 goes there with the
+          // IPv4 endpoint it listed in its hello, or not at all (0.0.0.0:0 ended up in the
+          // peer database of old nodes)
+          fc::ip::any_endpoint endpoint = *active_peer->get_remote_endpoint();
+          if (endpoint.is_v6())
+          {
+            auto v4 = std::find_if(active_peer->listen_endpoints.begin(), active_peer->listen_endpoints.end(),
+                                   [](const fc::ip::any_endpoint& e) { return e.is_v4(); });
+            if (v4 == active_peer->listen_endpoints.end())
+              continue;
+            endpoint = *v4;
+          }
+          reply.addresses.emplace_back(address_info(legacy_endpoint(endpoint),
                                                     fc::time_point::now(),
                                                     active_peer->round_trip_delay,
                                                     active_peer->node_id,
