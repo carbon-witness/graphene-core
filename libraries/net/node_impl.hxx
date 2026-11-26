@@ -408,6 +408,9 @@ class node_impl : public peer_connection_delegate
       fc::variant_object generate_hello_user_data();
       const std::vector<fc::ip::any_endpoint>& get_advertised_listen_endpoints();
       bool is_ipv6_usable();
+      /// whether to try an IPv6 endpoint: a public one needs our global IPv6 (is_ipv6_usable()),
+      /// a loopback, unique local or link-local one only a route to it
+      bool is_ipv6_usable_for(const fc::ip::any_endpoint& endpoint);
       void note_connection_result(const fc::ip::any_endpoint& remote_endpoint, bool success);
       /// an active or handshaking connection to the peer at that endpoint, outbound or inbound
       peer_connection_ptr get_connection_to_peer_at(const fc::ip::any_endpoint& endpoint);
