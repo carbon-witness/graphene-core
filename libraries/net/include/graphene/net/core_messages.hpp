@@ -29,6 +29,7 @@
 #include <fc/crypto/elliptic.hpp>
 #include <fc/crypto/sha256.hpp>
 #include <fc/network/ip.hpp>
+#include <fc/network/any_ip.hpp>
 #include <fc/time.hpp>
 #include <fc/variant_object.hpp>
 #include <fc/exception/exception.hpp>
@@ -85,6 +86,10 @@ namespace graphene { namespace net {
     check_firewall_reply_message_type            = 5015,
     get_current_connections_request_message_type = 5016,
     get_current_connections_reply_message_type   = 5017,
+    // IPv6 (1.2.2); nodes before it ignore these types (5000-5099 is skipped when unknown)
+    address_v2_message_type                      = 5018,
+    check_firewall_v2_message_type               = 5019,
+    check_firewall_v2_reply_message_type         = 5020,
     core_message_type_last                       = 5099
   };
 
@@ -370,6 +375,46 @@ namespace graphene { namespace net {
     fc::enum_type<uint8_t, firewall_check_result> result;
   };
 
+  /// The addresses of a node, IPv4 and IPv6: address_info holds one IPv4 endpoint
+  struct address_v2_info
+  {
+    /// the endpoints of one node, IPv6 first; only ones a connection has been made to
+    std::vector<fc::ip::any_endpoint> endpoints;
+    fc::time_point_sec        last_seen_time;
+    fc::microseconds          latency;
+    node_id_t                 node_id;
+    fc::enum_type<uint8_t, peer_connection_direction> direction;
+    fc::enum_type<uint8_t, firewalled_state> firewalled;
+  };
+
+  /// Sent instead of address_message to a peer that announced "p2p_ipv6" in its hello
+  struct address_v2_message
+  {
+    static const core_message_type_enum type;
+
+    std::vector<address_v2_info> addresses;
+  };
+
+  /**
+   * check_firewall_message for an endpoint of either family, between nodes that announced
+   * "p2p_ipv6". The node to check asks with its own node_id empty and the endpoint it wants
+   * checked (one it listed in its hello); a helper is asked with the node_id and the endpoint.
+   */
+  struct check_firewall_v2_message
+  {
+    static const core_message_type_enum type;
+    node_id_t node_id;
+    fc::ip::any_endpoint endpoint_to_check;
+  };
+
+  struct check_firewall_v2_reply_message
+  {
+    static const core_message_type_enum type;
+    node_id_t node_id;
+    fc::ip::any_endpoint endpoint_checked;
+    fc::enum_type<uint8_t, firewall_check_result> result;
+  };
+
   struct get_current_connections_request_message
   {
     static const core_message_type_enum type;
@@ -422,6 +467,9 @@ FC_REFLECT_ENUM( graphene::net::core_message_type_enum,
                  (check_firewall_reply_message_type)
                  (get_current_connections_request_message_type)
                  (get_current_connections_reply_message_type)
+                 (address_v2_message_type)
+                 (check_firewall_v2_message_type)
+                 (check_firewall_v2_reply_message_type)
                  (core_message_type_last) )
 FC_REFLECT_ENUM(graphene::net::rejection_reason_code, (unspecified)
                                                  (different_chain)
@@ -460,6 +508,10 @@ FC_REFLECT_TYPENAME( graphene::net::current_time_request_message )
 FC_REFLECT_TYPENAME( graphene::net::current_time_reply_message )
 FC_REFLECT_TYPENAME( graphene::net::check_firewall_message )
 FC_REFLECT_TYPENAME( graphene::net::check_firewall_reply_message )
+FC_REFLECT_TYPENAME( graphene::net::address_v2_info )
+FC_REFLECT_TYPENAME( graphene::net::address_v2_message )
+FC_REFLECT_TYPENAME( graphene::net::check_firewall_v2_message )
+FC_REFLECT_TYPENAME( graphene::net::check_firewall_v2_reply_message )
 FC_REFLECT_TYPENAME( graphene::net::get_current_connections_request_message )
 FC_REFLECT_TYPENAME( graphene::net::current_connection_data )
 FC_REFLECT_TYPENAME( graphene::net::get_current_connections_reply_message )
@@ -483,6 +535,10 @@ GRAPHENE_DECLARE_EXTERNAL_SERIALIZATION( graphene::net::current_time_request_mes
 GRAPHENE_DECLARE_EXTERNAL_SERIALIZATION( graphene::net::current_time_reply_message )
 GRAPHENE_DECLARE_EXTERNAL_SERIALIZATION( graphene::net::check_firewall_message )
 GRAPHENE_DECLARE_EXTERNAL_SERIALIZATION( graphene::net::check_firewall_reply_message )
+GRAPHENE_DECLARE_EXTERNAL_SERIALIZATION( graphene::net::address_v2_info )
+GRAPHENE_DECLARE_EXTERNAL_SERIALIZATION( graphene::net::address_v2_message )
+GRAPHENE_DECLARE_EXTERNAL_SERIALIZATION( graphene::net::check_firewall_v2_message )
+GRAPHENE_DECLARE_EXTERNAL_SERIALIZATION( graphene::net::check_firewall_v2_reply_message )
 GRAPHENE_DECLARE_EXTERNAL_SERIALIZATION( graphene::net::get_current_connections_request_message )
 GRAPHENE_DECLARE_EXTERNAL_SERIALIZATION( graphene::net::current_connection_data )
 GRAPHENE_DECLARE_EXTERNAL_SERIALIZATION( graphene::net::get_current_connections_reply_message )

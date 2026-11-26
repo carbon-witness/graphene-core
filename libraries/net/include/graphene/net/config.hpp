@@ -60,6 +60,8 @@
 #define GRAPHENE_NET_IPV6_ADDRESS_CHECK_SECONDS              60
 #define GRAPHENE_NET_IPV6_FAILURES_TO_DISABLE                3
 #define GRAPHENE_NET_IPV6_RETRY_SECONDS                      600
+/// our IPv6 endpoint found unreachable by check_firewall_v2 is not advertised; checked again after this
+#define GRAPHENE_NET_IPV6_FIREWALL_RECHECK_SECONDS           1800
 
 /**
  * AFter trying all peers, how long to wait before we check to

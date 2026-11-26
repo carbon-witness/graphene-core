@@ -334,6 +334,6 @@ FC_REFLECT_DERIVED_NO_TYPENAME( graphene::net::potential_peer_record, BOOST_PP_S
                                 (endpoint)(last_seen_time)(last_connection_disposition)
                                 (last_connection_attempt_time)(number_of_successful_connection_attempts)
                                 (number_of_failed_connection_attempts)(last_error)
-                                (transport)(tls_server_name)(alternate_endpoints) )
+                                (transport)(tls_server_name)(alternate_endpoints)(alternate_endpoints_confirmed) )
 
 GRAPHENE_IMPLEMENT_EXTERNAL_SERIALIZATION( graphene::net::potential_peer_record)

@@ -1387,6 +1387,15 @@ namespace graphene { namespace net { namespace detail {
       case core_message_type_enum::get_current_connections_reply_message_type:
         on_get_current_connections_reply_message(originating_peer, received_message.as<get_current_connections_reply_message>());
         break;
+      case core_message_type_enum::address_v2_message_type:
+        on_address_v2_message(originating_peer, received_message.as<address_v2_message>());
+        break;
+      case core_message_type_enum::check_firewall_v2_message_type:
+        on_check_firewall_v2_message(originating_peer, received_message.as<check_firewall_v2_message>());
+        break;
+      case core_message_type_enum::check_firewall_v2_reply_message_type:
+        on_check_firewall_v2_reply_message(originating_peer, received_message.as<check_firewall_v2_reply_message>());
+        break;
 
       default:
         // ignore any message in between core_message_type_first and _last that we don't handle above
@@ -1434,6 +1443,9 @@ namespace graphene { namespace net { namespace detail {
       if (_tls_context)
         user_data["p2p_transports"] = fc::variant( std::vector<std::string>{ "tls" }, 2 );
 
+      // address_v2_message and check_firewall_v2_message are understood
+      user_data["p2p_ipv6"] = true;
+
       // The endpoints to connect to us at, IPv6 included: the fields of the hello itself hold
       // one IPv4 address
       const std::vector<fc::ip::any_endpoint>& listen_endpoints = get_advertised_listen_endpoints();
@@ -1479,8 +1491,13 @@ namespace graphene { namespace net { namespace detail {
         if (v4 && v4->is_public())
           _advertised_listen_endpoints.push_back(fc::ip::any_endpoint(*v4, port));
       }
-      // IPv6, if the listener takes it: there is no NAT, our address is the one to connect to
-      if (_advertise_ipv6 && listening_address.is_v6())
+      // IPv6, if the listener takes it: there is no NAT, our address is the one to connect to.
+      // Not while the firewall check found it unreachable (a router dropping inbound IPv6):
+      // peers would only wait for a connection that fails. Checked again after a while.
+      if (_is_firewalled_v6 == firewalled_state::firewalled &&
+          now - _firewall_check_v6_time > fc::seconds(GRAPHENE_NET_IPV6_FIREWALL_RECHECK_SECONDS))
+        _is_firewalled_v6 = firewalled_state::unknown;
+      if (_advertise_ipv6 && listening_address.is_v6() && _is_firewalled_v6 != firewalled_state::firewalled)
       {
         fc::optional<fc::ip::any_address> v6 = fc::local_address_towards(route_probe_v6);
         if (v6 && v6->is_v6() && v6->is_public())
@@ -1508,6 +1525,8 @@ namespace graphene { namespace net { namespace detail {
         originating_peer->node_id = user_data["node_id"].as<node_id_t>(1);
       if (user_data.contains("last_known_fork_block_number"))
         originating_peer->last_known_fork_block_number = user_data["last_known_fork_block_number"].as<uint32_t>(1);
+      if (user_data.contains("p2p_ipv6"))
+        originating_peer->supports_p2p_ipv6 = true;
       if (user_data.contains("listen_endpoints"))
       {
         originating_peer->listen_endpoints.clear();
@@ -1793,7 +1812,11 @@ namespace graphene { namespace net { namespace detail {
       originating_peer->our_state = peer_connection::our_connection_state::connection_accepted;
       originating_peer->send_message(address_request_message());
       fc::time_point now = fc::time_point::now();
-      if (_is_firewalled == firewalled_state::unknown &&
+      // the IPv4 check needs a listener that takes IPv4 (0.0.0.0, [::] or an IPv4 address)
+      const bool listening_on_ipv4 = !_actual_listening_endpoint.is_v6() ||
+                                     _actual_listening_endpoint.get_address().is_unspecified();
+      if (listening_on_ipv4 &&
+          _is_firewalled == firewalled_state::unknown &&
           _last_firewall_check_message_sent < now - fc::minutes(5) &&
           originating_peer->core_protocol_version >= 106)
       {
@@ -1803,6 +1826,27 @@ namespace graphene { namespace net { namespace detail {
 
         originating_peer->send_message(check_firewall_message());
         _last_firewall_check_message_sent = now;
+      }
+      else if (_is_firewalled_v6 == firewalled_state::unknown &&
+               _firewall_check_v6_time < now - fc::minutes(5) &&
+               originating_peer->supports_p2p_ipv6 && !originating_peer->firewall_check_state)
+      {
+        // whether our IPv6 endpoint can be reached: there is no NAT, but a router may drop
+        // inbound IPv6
+        const std::vector<fc::ip::any_endpoint>& endpoints = get_advertised_listen_endpoints();
+        auto ipv6 = std::find_if(endpoints.begin(), endpoints.end(), [](const fc::ip::any_endpoint& e) { return e.is_v6(); });
+        if (ipv6 != endpoints.end())
+        {
+          ilog("Asking peer ${peer} to check whether ${endpoint} can be reached",
+               ("peer", originating_peer->get_remote_endpoint())("endpoint", *ipv6));
+          originating_peer->firewall_check_state = new firewall_check_state_data;
+          originating_peer->firewall_check_state->v2 = true;
+          originating_peer->firewall_check_state->endpoint_to_test = *ipv6;
+          check_firewall_v2_message request;
+          request.endpoint_to_check = *ipv6;
+          originating_peer->send_message(request);
+          _firewall_check_v6_time = now;
+        }
       }
     }
 
@@ -1853,6 +1897,51 @@ namespace graphene { namespace net { namespace detail {
       VERIFY_CORRECT_THREAD();
       dlog("Received an address request message");
 
+      if (originating_peer->supports_p2p_ipv6)
+      {
+        address_v2_message reply;
+        if (!_peer_advertising_disabled)
+          for (const peer_connection_ptr& active_peer : _active_connections)
+          {
+            // only endpoints a connection was made to: one we opened, or the listed endpoint of
+            // a peer that came from it, and the endpoints of its group that worked for us
+            fc::optional<fc::ip::any_endpoint> endpoint = active_peer->get_endpoint_for_connecting();
+            std::vector<fc::ip::any_endpoint> endpoints;
+            if (endpoint && (active_peer->direction == peer_connection_direction::outbound ||
+                             active_peer->is_firewalled == firewalled_state::not_firewalled))
+            {
+              endpoints.push_back(*endpoint);
+              fc::optional<potential_peer_record> record = _potential_peer_db.lookup_entry_for_endpoint(*endpoint);
+              if (record)
+              {
+                record->last_seen_time = fc::time_point::now();
+                _potential_peer_db.update_entry(*record);
+                for (const fc::ip::any_endpoint& alternate : record->alternate_endpoints)
+                {
+                  fc::optional<potential_peer_record> alternate_record = _potential_peer_db.lookup_entry_for_endpoint(alternate);
+                  if (alternate_record && (alternate_record->number_of_successful_connection_attempts > 0 ||
+                                           alternate_record->last_connection_disposition == last_connection_succeeded))
+                    endpoints.push_back(alternate);
+                }
+              }
+            }
+            if (endpoints.empty())
+              continue;
+            std::stable_partition(endpoints.begin(), endpoints.end(),
+                                  [](const fc::ip::any_endpoint& e) { return e.is_v6(); });
+            address_v2_info info;
+            info.endpoints = endpoints;
+            info.last_seen_time = fc::time_point::now();
+            info.latency = active_peer->round_trip_delay;
+            info.node_id = active_peer->node_id;
+            info.direction = active_peer->direction;
+            info.firewalled = active_peer->is_firewalled;
+            reply.addresses.push_back(info);
+          }
+        originating_peer->send_message(reply);
+        return;
+      }
+
       address_message reply;
       if (!_peer_advertising_disabled)
       {
@@ -1891,7 +1980,52 @@ namespace graphene { namespace net { namespace detail {
       bool new_information_received = merge_address_info_with_potential_peer_database(updated_addresses);
       if (new_information_received)
         trigger_p2p_network_connect_loop();
+      on_addresses_received(originating_peer);
+    }
 
+    void node_impl::on_address_v2_message(peer_connection* originating_peer, const address_v2_message& address_v2_message_received)
+    {
+      VERIFY_CORRECT_THREAD();
+      dlog("Received an address_v2 message containing ${size} nodes", ("size", address_v2_message_received.addresses.size()));
+      bool new_information_received = false;
+      const fc::time_point_sec now(fc::time_point::now());
+      for (const address_v2_info& address : address_v2_message_received.addresses)
+      {
+        if (address.firewalled != firewalled_state::not_firewalled)
+          continue;
+        std::vector<fc::ip::any_endpoint> endpoints;
+        for (const fc::ip::any_endpoint& endpoint : address.endpoints)
+        {
+          if (endpoints.size() >= GRAPHENE_NET_MAX_LISTEN_ENDPOINTS)
+            break;
+          if (endpoint.port() != 0 && !endpoint.get_address().is_unspecified() && !endpoint.get_address().is_multicast() &&
+              endpoint != _actual_listening_endpoint &&
+              std::find(_advertised_listen_endpoints.begin(), _advertised_listen_endpoints.end(), endpoint) == _advertised_listen_endpoints.end())
+            endpoints.push_back(endpoint);
+        }
+        for (const fc::ip::any_endpoint& endpoint : endpoints)
+        {
+          potential_peer_record record = _potential_peer_db.lookup_or_create_entry_for_endpoint(endpoint);
+          if (now > record.last_seen_time)
+            new_information_received = true;
+          record.last_seen_time = now;
+          // a group from another node only orders the attempts; the hello of the node itself
+          // replaces it
+          if (record.alternate_endpoints.empty() && endpoints.size() > 1)
+            for (const fc::ip::any_endpoint& other : endpoints)
+              if (other != endpoint)
+                record.alternate_endpoints.push_back(other);
+          _potential_peer_db.update_entry(record);
+        }
+      }
+      if (new_information_received)
+        trigger_p2p_network_connect_loop();
+      on_addresses_received(originating_peer);
+    }
+
+    void node_impl::on_addresses_received(peer_connection* originating_peer)
+    {
+      VERIFY_CORRECT_THREAD();
       if (_handshaking_connections.find(originating_peer->shared_from_this()) != _handshaking_connections.end())
       {
         // if we were handshaking, we need to continue with the next step in handshaking (which is either
@@ -3334,68 +3468,126 @@ namespace graphene { namespace net { namespace detail {
                                            (current_time_reply_message_received.reply_transmitted_time - current_time_reply_message_received.request_received_time);
     }
 
+    void node_impl::send_firewall_check_reply(peer_connection* peer, const node_id_t& node_id,
+                                              const fc::ip::any_endpoint& endpoint, firewall_check_result result, bool v2)
+    {
+      VERIFY_CORRECT_THREAD();
+      if (v2)
+      {
+        check_firewall_v2_reply_message reply;
+        reply.node_id = node_id;
+        reply.endpoint_checked = endpoint;
+        reply.result = result;
+        peer->send_message(reply);
+      }
+      else
+      {
+        check_firewall_reply_message reply;
+        reply.node_id = node_id;
+        reply.endpoint_checked = legacy_endpoint(endpoint);
+        reply.result = result;
+        peer->send_message(reply);
+      }
+    }
+
     void node_impl::forward_firewall_check_to_next_available_peer(firewall_check_state_data* firewall_check_state)
     {
-      // check_firewall_message holds an IPv4 endpoint: an IPv6 one would reach the helper as
-      // 0.0.0.0, and on Linux a connection to 0.0.0.0 goes to the helper itself
       for (const peer_connection_ptr& peer : _active_connections)
       {
-        if (firewall_check_state->endpoint_to_test.is_v6())
-          break;
-        if (firewall_check_state->expected_node_id != peer->node_id && // it's not the node who is asking us to test
-            !peer->firewall_check_state && // the peer isn't already performing a check for another node
-            firewall_check_state->nodes_already_tested.find(peer->node_id) == firewall_check_state->nodes_already_tested.end() &&
-            peer->core_protocol_version >= 106)
+        if (firewall_check_state->expected_node_id == peer->node_id || // it's the node who is asking us to test
+            peer->firewall_check_state || // the peer is already performing a check for another node
+            firewall_check_state->nodes_already_tested.find(peer->node_id) != firewall_check_state->nodes_already_tested.end())
+          continue;
+        // check_firewall_message holds an IPv4 endpoint: an IPv6 one never goes there (it would
+        // reach the helper as 0.0.0.0, and on Linux a connection to 0.0.0.0 goes to the helper
+        // itself); check_firewall_v2_message goes to nodes that announced it
+        if (firewall_check_state->v2 ? !peer->supports_p2p_ipv6 :
+                                       (peer->core_protocol_version < 106 || firewall_check_state->endpoint_to_test.is_v6()))
+          continue;
+        wlog("forwarding firewall check for node ${to_check} to peer ${checker}",
+             ("to_check", firewall_check_state->endpoint_to_test)
+             ("checker", peer->get_remote_endpoint()));
+        firewall_check_state->nodes_already_tested.insert(peer->node_id);
+        peer->firewall_check_state = firewall_check_state;
+        if (firewall_check_state->v2)
         {
-          wlog("forwarding firewall check for node ${to_check} to peer ${checker}",
-               ("to_check", firewall_check_state->endpoint_to_test)
-               ("checker", peer->get_remote_endpoint()));
-          firewall_check_state->nodes_already_tested.insert(peer->node_id);
-          peer->firewall_check_state = firewall_check_state;
+          check_firewall_v2_message check_request;
+          check_request.endpoint_to_check = firewall_check_state->endpoint_to_test;
+          check_request.node_id = firewall_check_state->expected_node_id;
+          peer->send_message(check_request);
+        }
+        else
+        {
           check_firewall_message check_request;
           check_request.endpoint_to_check = legacy_endpoint(firewall_check_state->endpoint_to_test);
           check_request.node_id = firewall_check_state->expected_node_id;
           peer->send_message(check_request);
-          return;
         }
+        return;
       }
       wlog("Unable to forward firewall check for node ${to_check} to any other peers, returning 'unable'",
            ("to_check", firewall_check_state->endpoint_to_test));
 
       peer_connection_ptr originating_peer = get_peer_by_node_id(firewall_check_state->expected_node_id);
       if (originating_peer)
-      {
-        check_firewall_reply_message reply;
-        reply.node_id = firewall_check_state->expected_node_id;
-        reply.endpoint_checked = legacy_endpoint(firewall_check_state->endpoint_to_test);
-        reply.result = firewall_check_result::unable_to_check;
-        originating_peer->send_message(reply);
-      }
+        send_firewall_check_reply(originating_peer.get(), firewall_check_state->expected_node_id,
+                                  firewall_check_state->endpoint_to_test, firewall_check_result::unable_to_check,
+                                  firewall_check_state->v2);
       delete firewall_check_state;
     }
 
     void node_impl::on_check_firewall_message(peer_connection* originating_peer,
                                               const check_firewall_message& check_firewall_message_received)
     {
+      handle_check_firewall(originating_peer, check_firewall_message_received.node_id,
+                            fc::ip::any_endpoint(check_firewall_message_received.endpoint_to_check), false);
+    }
+
+    void node_impl::on_check_firewall_v2_message(peer_connection* originating_peer,
+                                                 const check_firewall_v2_message& check_firewall_message_received)
+    {
+      handle_check_firewall(originating_peer, check_firewall_message_received.node_id,
+                            check_firewall_message_received.endpoint_to_check, true);
+    }
+
+    void node_impl::handle_check_firewall(peer_connection* originating_peer, const node_id_t& node_id,
+                                          const fc::ip::any_endpoint& endpoint_to_check, bool v2)
+    {
       VERIFY_CORRECT_THREAD();
 
-      if (check_firewall_message_received.node_id == node_id_t() &&
-          check_firewall_message_received.endpoint_to_check == fc::ip::any_endpoint())
+      if (node_id == node_id_t() && (v2 || endpoint_to_check == fc::ip::any_endpoint()))
       {
         // originating_peer is asking us to test whether it is firewalled
         // we're not going to try to connect back to the originating peer directly,
         // instead, we're going to coordinate requests by asking some of our peers
         // to try to connect to the originating peer, and relay the results back
         wlog("Peer ${peer} wants us to check whether it is firewalled", ("peer", originating_peer->get_remote_endpoint()));
+        fc::ip::any_endpoint endpoint;
+        if (v2)
+        {
+          // the endpoint to check: one the peer listed in its hello, so that it cannot have
+          // other nodes connect to an address that is not its own
+          if (std::find(originating_peer->listen_endpoints.begin(), originating_peer->listen_endpoints.end(),
+                        endpoint_to_check) == originating_peer->listen_endpoints.end())
+          {
+            send_firewall_check_reply(originating_peer, node_id, endpoint_to_check, firewall_check_result::unable_to_check, true);
+            return;
+          }
+          endpoint = endpoint_to_check;
+        }
+        else
+        {
+          // if they are using the same inbound and outbound port, try connecting to their outbound endpoint.
+          // if they are using a different inbound port, use their outbound address but the inbound port they reported
+          endpoint = originating_peer->get_socket().remote_any_endpoint();
+          if (originating_peer->inbound_port != originating_peer->outbound_port)
+            endpoint = fc::ip::any_endpoint(endpoint.get_address(), originating_peer->inbound_port);
+        }
         firewall_check_state_data* firewall_check_state = new firewall_check_state_data;
-        // if they are using the same inbound and outbound port, try connecting to their outbound endpoint.
-        // if they are using a different inbound port, use their outbound address but the inbound port they reported
-        fc::ip::any_endpoint endpoint_to_check = originating_peer->get_socket().remote_any_endpoint();
-        if (originating_peer->inbound_port != originating_peer->outbound_port)
-          endpoint_to_check = fc::ip::any_endpoint(endpoint_to_check.get_address(), originating_peer->inbound_port);
-        firewall_check_state->endpoint_to_test = endpoint_to_check;
+        firewall_check_state->endpoint_to_test = endpoint;
         firewall_check_state->expected_node_id = originating_peer->node_id;
         firewall_check_state->requesting_peer = originating_peer->node_id;
+        firewall_check_state->v2 = v2;
 
         forward_firewall_check_to_next_available_peer(firewall_check_state);
       }
@@ -3403,18 +3595,14 @@ namespace graphene { namespace net { namespace detail {
       {
         // we're being asked to check another node
         // first, find out if we're currently connected to that node.  If we are, we
-        // can't perform the test
-        // 0.0.0.0 is what an IPv6 endpoint becomes in this message; a connection to it would
-        // go to this node itself
-        if (is_already_connected_to_id(check_firewall_message_received.node_id) ||
-            is_connection_to_endpoint_in_progress(check_firewall_message_received.endpoint_to_check) ||
-            fc::ip::any_endpoint(check_firewall_message_received.endpoint_to_check).get_address().is_unspecified())
+        // can't perform the test. 0.0.0.0 is what an IPv6 endpoint becomes in the old message;
+        // a connection to it would go to this node itself. An IPv6 endpoint needs our IPv6.
+        if (is_already_connected_to_id(node_id) ||
+            is_connection_to_endpoint_in_progress(endpoint_to_check) ||
+            endpoint_to_check.get_address().is_unspecified() ||
+            (endpoint_to_check.is_v6() && !is_ipv6_usable()))
         {
-          check_firewall_reply_message reply;
-          reply.node_id = check_firewall_message_received.node_id;
-          reply.endpoint_checked = check_firewall_message_received.endpoint_to_check;
-          reply.result = firewall_check_result::unable_to_check;
-          originating_peer->send_message(reply);
+          send_firewall_check_reply(originating_peer, node_id, endpoint_to_check, firewall_check_result::unable_to_check, v2);
         }
         else
         {
@@ -3422,10 +3610,11 @@ namespace graphene { namespace net { namespace detail {
           // to test.
           peer_connection_ptr peer_for_testing(peer_connection::make_shared(this));
           peer_for_testing->firewall_check_state = new firewall_check_state_data;
-          peer_for_testing->firewall_check_state->endpoint_to_test = fc::ip::any_endpoint(check_firewall_message_received.endpoint_to_check);
-          peer_for_testing->firewall_check_state->expected_node_id = check_firewall_message_received.node_id;
+          peer_for_testing->firewall_check_state->endpoint_to_test = endpoint_to_check;
+          peer_for_testing->firewall_check_state->expected_node_id = node_id;
           peer_for_testing->firewall_check_state->requesting_peer = originating_peer->node_id;
-          peer_for_testing->set_remote_endpoint(fc::ip::any_endpoint(check_firewall_message_received.endpoint_to_check));
+          peer_for_testing->firewall_check_state->v2 = v2;
+          peer_for_testing->set_remote_endpoint(endpoint_to_check);
           initiate_connect_to(peer_for_testing);
         }
       }
@@ -3433,6 +3622,23 @@ namespace graphene { namespace net { namespace detail {
 
     void node_impl::on_check_firewall_reply_message(peer_connection* originating_peer,
                                                     const check_firewall_reply_message& check_firewall_reply_message_received)
+    {
+      handle_check_firewall_reply(originating_peer, check_firewall_reply_message_received.node_id,
+                                  fc::ip::any_endpoint(check_firewall_reply_message_received.endpoint_checked),
+                                  check_firewall_reply_message_received.result, false);
+    }
+
+    void node_impl::on_check_firewall_v2_reply_message(peer_connection* originating_peer,
+                                                       const check_firewall_v2_reply_message& check_firewall_reply_message_received)
+    {
+      handle_check_firewall_reply(originating_peer, check_firewall_reply_message_received.node_id,
+                                  check_firewall_reply_message_received.endpoint_checked,
+                                  check_firewall_reply_message_received.result, true);
+    }
+
+    void node_impl::handle_check_firewall_reply(peer_connection* originating_peer, const node_id_t& node_id,
+                                                const fc::ip::any_endpoint& endpoint_checked,
+                                                firewall_check_result result, bool v2)
     {
       VERIFY_CORRECT_THREAD();
 
@@ -3445,33 +3651,36 @@ namespace graphene { namespace net { namespace detail {
         // we'll try another peer.
         wlog("Peer ${reporter} reports firewall check status ${status} for ${peer}",
              ("reporter", originating_peer->get_remote_endpoint())
-             ("status", check_firewall_reply_message_received.result)
-             ("peer", check_firewall_reply_message_received.endpoint_checked));
+             ("status", result)
+             ("peer", endpoint_checked));
 
-        if (check_firewall_reply_message_received.result == firewall_check_result::unable_to_connect ||
-            check_firewall_reply_message_received.result == firewall_check_result::connection_successful)
+        if (result == firewall_check_result::unable_to_connect ||
+            result == firewall_check_result::connection_successful)
         {
           peer_connection_ptr original_peer = get_peer_by_node_id(originating_peer->firewall_check_state->requesting_peer);
           if (original_peer)
           {
-            if (check_firewall_reply_message_received.result == firewall_check_result::connection_successful)
+            if (result == firewall_check_result::connection_successful)
             {
-              // if we previously thought this peer was firewalled, mark them as not firewalled
-              if (original_peer->is_firewalled != firewalled_state::not_firewalled)
+              // the endpoint can be reached: into our database. For the old check, if we thought
+              // the peer was firewalled, mark it as not firewalled
+              fc::optional<fc::ip::any_endpoint> reachable_endpoint;
+              if (v2)
+                reachable_endpoint = endpoint_checked;
+              else if (original_peer->is_firewalled != firewalled_state::not_firewalled)
               {
-
                 original_peer->is_firewalled = firewalled_state::not_firewalled;
-                // there should be no old entry if we thought they were firewalled, so just create a new one
-                fc::optional<fc::ip::any_endpoint> inbound_endpoint = originating_peer->get_endpoint_for_connecting();
-                if (inbound_endpoint)
-                {
-                  potential_peer_record updated_peer_record = _potential_peer_db.lookup_or_create_entry_for_endpoint(*inbound_endpoint);
-                  updated_peer_record.last_seen_time = fc::time_point::now();
-                  _potential_peer_db.update_entry(updated_peer_record);
-                }
+                // the endpoint of the checked peer (this was the endpoint of the helper)
+                reachable_endpoint = original_peer->get_endpoint_for_connecting();
+              }
+              if (reachable_endpoint)
+              {
+                potential_peer_record updated_peer_record = _potential_peer_db.lookup_or_create_entry_for_endpoint(*reachable_endpoint);
+                updated_peer_record.last_seen_time = fc::time_point::now();
+                _potential_peer_db.update_entry(updated_peer_record);
               }
             }
-            original_peer->send_message(check_firewall_reply_message_received);
+            send_firewall_check_reply(original_peer.get(), node_id, endpoint_checked, result, v2);
           }
           delete originating_peer->firewall_check_state;
           originating_peer->firewall_check_state = nullptr;
@@ -3488,15 +3697,29 @@ namespace graphene { namespace net { namespace detail {
       {
         // this is a reply to a firewall check we initiated.
         wlog("Firewall check we initiated has returned with result: ${result}, endpoint = ${endpoint}",
-             ("result", check_firewall_reply_message_received.result)
-             ("endpoint", check_firewall_reply_message_received.endpoint_checked));
-        if (check_firewall_reply_message_received.result == firewall_check_result::connection_successful)
+             ("result", result)
+             ("endpoint", endpoint_checked));
+        if (v2)
+        {
+          if (result == firewall_check_result::connection_successful)
+            _is_firewalled_v6 = firewalled_state::not_firewalled;
+          else if (result == firewall_check_result::unable_to_connect)
+          {
+            _is_firewalled_v6 = firewalled_state::firewalled;
+            wlog("our IPv6 endpoint ${endpoint} cannot be reached from outside; not advertising it. "
+                 "Allow inbound connections to port ${port} in the router or firewall",
+                 ("endpoint", endpoint_checked)("port", endpoint_checked.port()));
+          }
+          _firewall_check_v6_time = fc::time_point::now();
+          _advertised_listen_endpoints_time = fc::time_point();
+        }
+        else if (result == firewall_check_result::connection_successful)
         {
           _is_firewalled = firewalled_state::not_firewalled;
-          _publicly_visible_listening_endpoint = fc::ip::any_endpoint(check_firewall_reply_message_received.endpoint_checked);
+          _publicly_visible_listening_endpoint = endpoint_checked;
           _advertised_listen_endpoints_time = fc::time_point(); // advertise the new endpoint
         }
-        else if (check_firewall_reply_message_received.result == firewall_check_result::unable_to_connect)
+        else if (result == firewall_check_result::unable_to_connect)
         {
           _is_firewalled = firewalled_state::firewalled;
           _publicly_visible_listening_endpoint = fc::optional<fc::ip::any_endpoint>();
@@ -3509,7 +3732,6 @@ namespace graphene { namespace net { namespace detail {
       {
         wlog("Received a firewall check reply to a request I never sent");
       }
-
     }
 
     void node_impl::on_get_current_connections_request_message(peer_connection* originating_peer,
@@ -4165,10 +4387,7 @@ namespace graphene { namespace net { namespace detail {
         peer_connection_ptr requesting_peer = get_peer_by_node_id(new_peer->firewall_check_state->requesting_peer);
         if (requesting_peer)
         {
-          check_firewall_reply_message reply;
-          reply.endpoint_checked = legacy_endpoint(new_peer->firewall_check_state->endpoint_to_test);
-          reply.node_id = new_peer->firewall_check_state->expected_node_id;
-          reply.result = connect_failed_exception ?
+          const firewall_check_result result = connect_failed_exception ?
                            firewall_check_result::unable_to_connect :
                            firewall_check_result::connection_successful;
           wlog("firewall check of ${peer_checked} ${success_or_failure}, sending reply to ${requester}",
@@ -4176,7 +4395,9 @@ namespace graphene { namespace net { namespace detail {
                 ("success_or_failure", connect_failed_exception ? "failed" : "succeeded" )
                 ("requester", requesting_peer->get_remote_endpoint()));
 
-          requesting_peer->send_message(reply);
+          send_firewall_check_reply(requesting_peer.get(), new_peer->firewall_check_state->expected_node_id,
+                                    new_peer->firewall_check_state->endpoint_to_test, result,
+                                    new_peer->firewall_check_state->v2);
         }
       }
 
@@ -4494,6 +4715,8 @@ namespace graphene { namespace net { namespace detail {
           // a new network (another Wi-Fi, IPv6 turned on): forget the failures of the old one
           _ipv6_disabled_until = fc::time_point();
           _ipv6_failed_endpoints.clear();
+          _is_firewalled_v6 = firewalled_state::unknown;
+          _advertised_listen_endpoints_time = fc::time_point();
         }
         _ipv6_address = ipv6_address;
       }
@@ -4557,6 +4780,11 @@ namespace graphene { namespace net { namespace detail {
         peer_connection_ptr peer = get_connection_to_peer_at(alternate);
         if (!peer)
           continue;
+        // a group told by another node counts only once the connected node lists this
+        // endpoint itself: otherwise a node could keep us from connecting to another one
+        if (!record.alternate_endpoints_confirmed &&
+            std::find(peer->listen_endpoints.begin(), peer->listen_endpoints.end(), record.endpoint) == peer->listen_endpoints.end())
+          continue;
         // An IPv4 address waits for an IPv6 connection to the same node only for a while: a
         // connection still not up then is likely to fail (happy eyeballs, RFC 8305)
         if (record.endpoint.is_v4() && alternate.is_v6() &&
@@ -4585,9 +4813,11 @@ namespace graphene { namespace net { namespace detail {
           if (other != endpoint)
             others.push_back(other);
         potential_peer_record record = _potential_peer_db.lookup_or_create_entry_for_endpoint(endpoint);
-        if (record.alternate_endpoints != others || record.last_seen_time == fc::time_point_sec())
+        if (record.alternate_endpoints != others || !record.alternate_endpoints_confirmed ||
+            record.last_seen_time == fc::time_point_sec())
         {
           record.alternate_endpoints = others;
+          record.alternate_endpoints_confirmed = true;
           _potential_peer_db.update_entry(record);
         }
       }
@@ -5004,6 +5234,7 @@ namespace graphene { namespace net { namespace detail {
       info["node_public_key"] = fc::variant( _node_public_key, 1 );
       info["node_id"] = fc::variant( _node_id, 1 );
       info["firewalled"] = fc::variant( _is_firewalled, 1 );
+      info["firewalled_v6"] = fc::variant( _is_firewalled_v6, 1 );
       return info;
     }
     fc::variant_object node_impl::network_get_usage_stats() const
