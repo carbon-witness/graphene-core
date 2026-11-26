@@ -23,6 +23,7 @@
  */
 #pragma once
 #include <fc/network/tcp_socket.hpp>
+#include <fc/network/any_ip.hpp>
 #include <fc/crypto/aes.hpp>
 #include <fc/crypto/elliptic.hpp>
 
@@ -62,8 +63,8 @@ class stcp_socket : public virtual fc::iostream
     /// client sends tells them apart
     void             accept();
 
-    void             connect_to( const fc::ip::endpoint& remote_endpoint );
-    void             bind( const fc::ip::endpoint& local_endpoint );
+    void             connect_to( const fc::ip::any_endpoint& remote_endpoint );
+    void             bind( const fc::ip::any_endpoint& local_endpoint );
 
     virtual size_t   readsome( char* buffer, size_t max );
     virtual size_t   readsome( const std::shared_ptr<char>& buf, size_t len, size_t offset );

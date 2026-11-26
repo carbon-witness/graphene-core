@@ -219,7 +219,7 @@ namespace graphene { namespace app {
        return result;
     }
 
-    void network_node_api::add_node(const fc::ip::endpoint& ep)
+    void network_node_api::add_node(const fc::ip::any_endpoint& ep)
     {
        _app.p2p_node()->add_node(ep);
     }

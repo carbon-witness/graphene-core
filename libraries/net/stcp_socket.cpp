@@ -82,7 +82,7 @@ void stcp_socket::set_tls( std::shared_ptr<const tls_context> context, bool outb
   _unread_input.clear();
 }
 
-void stcp_socket::connect_to( const fc::ip::endpoint& remote_endpoint )
+void stcp_socket::connect_to( const fc::ip::any_endpoint& remote_endpoint )
 {
   _sock.connect_to( remote_endpoint );
   if( _outbound_tls )
@@ -125,7 +125,7 @@ void stcp_socket::raw_write( const std::shared_ptr<const char>& buffer, size_t l
     _sock.write( buffer, length );
 }
 
-void stcp_socket::bind( const fc::ip::endpoint& local_endpoint )
+void stcp_socket::bind( const fc::ip::any_endpoint& local_endpoint )
 {
   _sock.bind(local_endpoint);
 }

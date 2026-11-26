@@ -27,6 +27,7 @@
 #include <graphene/protocol/types.hpp>
 
 #include <fc/network/ip.hpp>
+#include <fc/network/any_ip.hpp>
 #include <fc/time.hpp>
 #include <fc/io/enum_type.hpp>
 #include <fc/reflect/reflect.hpp>
@@ -54,7 +55,7 @@ namespace graphene { namespace net {
 
   struct potential_peer_record
   {
-    fc::ip::endpoint                  endpoint;
+    fc::ip::any_endpoint                  endpoint;
     fc::time_point_sec                last_seen_time;
     fc::enum_type<uint8_t,potential_peer_last_connection_disposition> last_connection_disposition;
     fc::time_point_sec                last_connection_attempt_time;
@@ -69,7 +70,7 @@ namespace graphene { namespace net {
       number_of_successful_connection_attempts(0),
     number_of_failed_connection_attempts(0){}
 
-    potential_peer_record(fc::ip::endpoint endpoint,
+    potential_peer_record(fc::ip::any_endpoint endpoint,
                           fc::time_point_sec last_seen_time = fc::time_point_sec(),
                           potential_peer_last_connection_disposition last_connection_disposition = never_attempted_to_connect) :
       endpoint(endpoint),
@@ -114,11 +115,11 @@ namespace graphene { namespace net {
     void close();
     void clear();
 
-    void erase(const fc::ip::endpoint& endpointToErase);
+    void erase(const fc::ip::any_endpoint& endpointToErase);
 
     void update_entry(const potential_peer_record& updatedRecord);
-    potential_peer_record lookup_or_create_entry_for_endpoint(const fc::ip::endpoint& endpointToLookup);
-    fc::optional<potential_peer_record> lookup_entry_for_endpoint(const fc::ip::endpoint& endpointToLookup);
+    potential_peer_record lookup_or_create_entry_for_endpoint(const fc::ip::any_endpoint& endpointToLookup);
+    fc::optional<potential_peer_record> lookup_entry_for_endpoint(const fc::ip::any_endpoint& endpointToLookup);
 
     typedef detail::peer_database_iterator iterator;
     iterator begin() const;

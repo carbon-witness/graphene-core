@@ -51,8 +51,8 @@ namespace graphene { namespace net {
        stcp_socket&    get_stcp_socket();
 
        void accept();
-       void bind(const fc::ip::endpoint& local_endpoint);
-       void connect_to(const fc::ip::endpoint& remote_endpoint);
+       void bind(const fc::ip::any_endpoint& local_endpoint);
+       void connect_to(const fc::ip::any_endpoint& remote_endpoint);
 
        void send_message(const message& message_to_send);
        void close_connection();

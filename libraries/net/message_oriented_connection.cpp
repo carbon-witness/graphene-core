@@ -75,8 +75,8 @@ namespace graphene { namespace net {
       fc::tcp_socket& get_socket();
       stcp_socket& get_stcp_socket() { return _sock; }
       void accept();
-      void connect_to(const fc::ip::endpoint& remote_endpoint);
-      void bind(const fc::ip::endpoint& local_endpoint);
+      void connect_to(const fc::ip::any_endpoint& remote_endpoint);
+      void bind(const fc::ip::any_endpoint& local_endpoint);
 
       message_oriented_connection_impl(message_oriented_connection* self,
                                        message_oriented_connection_delegate* delegate = nullptr);
@@ -130,7 +130,7 @@ namespace graphene { namespace net {
       _ready_for_sending->set_value();
     }
 
-    void message_oriented_connection_impl::connect_to(const fc::ip::endpoint& remote_endpoint)
+    void message_oriented_connection_impl::connect_to(const fc::ip::any_endpoint& remote_endpoint)
     {
       VERIFY_CORRECT_THREAD();
       _sock.connect_to(remote_endpoint);
@@ -139,7 +139,7 @@ namespace graphene { namespace net {
       _ready_for_sending->set_value();
     }
 
-    void message_oriented_connection_impl::bind(const fc::ip::endpoint& local_endpoint)
+    void message_oriented_connection_impl::bind(const fc::ip::any_endpoint& local_endpoint)
     {
       VERIFY_CORRECT_THREAD();
       _sock.bind(local_endpoint);
@@ -254,12 +254,12 @@ namespace graphene { namespace net {
       VERIFY_CORRECT_THREAD();
 #if 0 // this gets too verbose
 #ifndef NDEBUG
-      fc::optional<fc::ip::endpoint> remote_endpoint;
+      fc::optional<fc::ip::any_endpoint> remote_endpoint;
       if (_sock.get_socket().is_open())
-        remote_endpoint = _sock.get_socket().remote_endpoint();
+        remote_endpoint = _sock.get_socket().remote_any_endpoint();
       struct scope_logger {
-        const fc::optional<fc::ip::endpoint>& endpoint;
-        scope_logger(const fc::optional<fc::ip::endpoint>& endpoint) : endpoint(endpoint) { dlog("entering message_oriented_connection::send_message() for peer ${endpoint}", ("endpoint", endpoint)); }
+        const fc::optional<fc::ip::any_endpoint>& endpoint;
+        scope_logger(const fc::optional<fc::ip::any_endpoint>& endpoint) : endpoint(endpoint) { dlog("entering message_oriented_connection::send_message() for peer ${endpoint}", ("endpoint", endpoint)); }
         ~scope_logger() { dlog("leaving message_oriented_connection::send_message() for peer ${endpoint}", ("endpoint", endpoint)); }
       } send_message_scope_logger(remote_endpoint);
 #endif
@@ -297,9 +297,9 @@ namespace graphene { namespace net {
     {
       VERIFY_CORRECT_THREAD();
 
-      fc::optional<fc::ip::endpoint> remote_endpoint;
+      fc::optional<fc::ip::any_endpoint> remote_endpoint;
       if (_sock.get_socket().is_open())
-        remote_endpoint = _sock.get_socket().remote_endpoint();
+        remote_endpoint = _sock.get_socket().remote_any_endpoint();
       ilog( "in destroy_connection() for ${endpoint}", ("endpoint", remote_endpoint) );
 
       if (_send_message_in_progress)
@@ -379,12 +379,12 @@ namespace graphene { namespace net {
     my->accept();
   }
 
-  void message_oriented_connection::connect_to(const fc::ip::endpoint& remote_endpoint)
+  void message_oriented_connection::connect_to(const fc::ip::any_endpoint& remote_endpoint)
   {
     my->connect_to(remote_endpoint);
   }
 
-  void message_oriented_connection::bind(const fc::ip::endpoint& local_endpoint)
+  void message_oriented_connection::bind(const fc::ip::any_endpoint& local_endpoint)
   {
     my->bind(local_endpoint);
   }

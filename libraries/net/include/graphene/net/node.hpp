@@ -24,6 +24,7 @@
 #pragma once
 
 #include <graphene/net/core_messages.hpp>
+#include <fc/network/any_ip.hpp>
 #include <graphene/net/message.hpp>
 #include <graphene/net/peer_database.hpp>
 #include <graphene/net/tls.hpp>
@@ -175,7 +176,7 @@ namespace graphene { namespace net {
    struct peer_status
    {
       uint32_t         version;
-      fc::ip::endpoint host;
+      fc::ip::any_endpoint host;
       /** info contains the fields required by bitcoin-rpc's getpeerinfo call, we will likely
           extend it with our own fields. */
       fc::variant_object info;
@@ -210,7 +211,7 @@ namespace graphene { namespace net {
          *  to attempt to connect to.  This database is consulted any time
          *  the number connected peers falls below the target.
          */
-        void      add_node( const fc::ip::endpoint& ep );
+        void      add_node( const fc::ip::any_endpoint& ep );
 
         /// TLS for P2P connections (default: auto with a self-signed certificate); call before
         /// listen_to_p2p_network()
@@ -219,19 +220,19 @@ namespace graphene { namespace net {
          * What the node knows about how to connect to @p ep, from a seed node given as
          * tls://host:port (@p tls true) or by host name (@p server_name, sent as SNI).
          */
-        void      set_peer_transport( const fc::ip::endpoint& ep, bool tls,
+        void      set_peer_transport( const fc::ip::any_endpoint& ep, bool tls,
                                       const fc::optional<std::string>& server_name );
 
         /**
          *  Attempt to connect to the specified endpoint immediately.
          */
-        virtual void connect_to_endpoint( const fc::ip::endpoint& ep );
+        virtual void connect_to_endpoint( const fc::ip::any_endpoint& ep );
 
         /**
          *  Specifies the network interface and port upon which incoming
          *  connections should be accepted.
          */
-        void      listen_on_endpoint( const fc::ip::endpoint& ep, bool wait_if_not_available );
+        void      listen_on_endpoint( const fc::ip::any_endpoint& ep, bool wait_if_not_available );
 
         /**
          *  Call with true to enable listening for incoming connections
@@ -253,7 +254,7 @@ namespace graphene { namespace net {
          * as the value previously passed in to listen_on_endpoint, unless we
          * were unable to bind to that port.
          */
-        virtual fc::ip::endpoint get_actual_listening_endpoint() const;
+        virtual fc::ip::any_endpoint get_actual_listening_endpoint() const;
 
         /**
          *  @return a list of peers that are currently connected.
@@ -314,9 +315,9 @@ namespace graphene { namespace net {
       simulated_network(const std::string& user_agent) : node(user_agent) {}
       void      listen_to_p2p_network() override {}
       void      connect_to_p2p_network() override {}
-      void      connect_to_endpoint(const fc::ip::endpoint& ep) override {}
+      void      connect_to_endpoint(const fc::ip::any_endpoint& ep) override {}
 
-      fc::ip::endpoint get_actual_listening_endpoint() const override { return fc::ip::endpoint(); }
+      fc::ip::any_endpoint get_actual_listening_endpoint() const override { return fc::ip::any_endpoint(); }
 
       void      sync_from(const item_id& current_head_block, const std::vector<uint32_t>& hard_fork_block_numbers) override {}
       void      broadcast(const message& item_to_broadcast) override;

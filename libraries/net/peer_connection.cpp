@@ -118,8 +118,8 @@ namespace graphene { namespace net
 #if 0 // this gets too verbose
 #ifndef NDEBUG
       struct scope_logger {
-        fc::optional<fc::ip::endpoint> endpoint;
-        scope_logger(const fc::optional<fc::ip::endpoint>& endpoint) : endpoint(endpoint) { dlog("entering peer_connection::destroy() for peer ${endpoint}", ("endpoint", endpoint)); }
+        fc::optional<fc::ip::any_endpoint> endpoint;
+        scope_logger(const fc::optional<fc::ip::any_endpoint>& endpoint) : endpoint(endpoint) { dlog("entering peer_connection::destroy() for peer ${endpoint}", ("endpoint", endpoint)); }
         ~scope_logger() { dlog("leaving peer_connection::destroy() for peer ${endpoint}", ("endpoint", endpoint)); }
       } send_message_scope_logger(get_remote_endpoint());
 #endif
@@ -202,18 +202,18 @@ namespace graphene { namespace net
         negotiation_status = connection_negotiation_status::accepting;
         _message_connection.accept();           // perform key exchange
         negotiation_status = connection_negotiation_status::accepted;
-        _remote_endpoint = _message_connection.get_socket().remote_endpoint();
+        _remote_endpoint = _message_connection.get_socket().remote_any_endpoint();
 
         // firewall-detecting info is pretty useless for inbound connections, but initialize
         // it the best we can
-        fc::ip::endpoint local_endpoint = _message_connection.get_socket().local_endpoint();
+        fc::ip::any_endpoint local_endpoint = _message_connection.get_socket().local_any_endpoint();
         inbound_address = local_endpoint.get_address();
         inbound_port = local_endpoint.port();
         outbound_port = inbound_port;
 
         their_state = their_connection_state::just_connected;
         our_state = our_connection_state::just_connected;
-        ilog( "established inbound connection from ${remote_endpoint}, sending hello", ("remote_endpoint", _message_connection.get_socket().remote_endpoint() ) );
+        ilog( "established inbound connection from ${remote_endpoint}, sending hello", ("remote_endpoint", _message_connection.get_socket().remote_any_endpoint() ) );
       }
       catch ( const fc::exception& e )
       {
@@ -222,7 +222,7 @@ namespace graphene { namespace net
       }
     }
 
-    void peer_connection::connect_to( const fc::ip::endpoint& remote_endpoint, fc::optional<fc::ip::endpoint> local_endpoint )
+    void peer_connection::connect_to( const fc::ip::any_endpoint& remote_endpoint, fc::optional<fc::ip::any_endpoint> local_endpoint )
     {
       VERIFY_CORRECT_THREAD();
       try
@@ -296,7 +296,7 @@ namespace graphene { namespace net
           // whose local endpoint stays in TIME_WAIT
           fc::tcp_socket& socket = _message_connection.get_socket();
           socket.close();
-          socket.open();
+          socket.open_for( remote_endpoint );
           bound_to_local_endpoint = false;
         }
         negotiation_status = connection_negotiation_status::connected;
@@ -333,7 +333,7 @@ namespace graphene { namespace net
     {
       try
       {
-        _message_connection.get_socket().remote_endpoint();
+        _message_connection.get_socket().remote_any_endpoint();
         return true;
       }
       catch ( const fc::exception& )
@@ -505,18 +505,18 @@ namespace graphene { namespace net
       return _message_connection.get_last_message_received_time();
     }
 
-    fc::optional<fc::ip::endpoint> peer_connection::get_remote_endpoint()
+    fc::optional<fc::ip::any_endpoint> peer_connection::get_remote_endpoint()
     {
       VERIFY_CORRECT_THREAD();
       return _remote_endpoint;
     }
-    fc::ip::endpoint peer_connection::get_local_endpoint()
+    fc::ip::any_endpoint peer_connection::get_local_endpoint()
     {
       VERIFY_CORRECT_THREAD();
-      return _message_connection.get_socket().local_endpoint();
+      return _message_connection.get_socket().local_any_endpoint();
     }
 
-    void peer_connection::set_remote_endpoint( fc::optional<fc::ip::endpoint> new_remote_endpoint )
+    void peer_connection::set_remote_endpoint( fc::optional<fc::ip::any_endpoint> new_remote_endpoint )
     {
       VERIFY_CORRECT_THREAD();
       _remote_endpoint = new_remote_endpoint;
@@ -597,11 +597,13 @@ namespace graphene { namespace net
       return firewall_check_state && firewall_check_state->requesting_peer != node_id_t();
     }
 
-    fc::optional<fc::ip::endpoint> peer_connection::get_endpoint_for_connecting() const
+    fc::optional<fc::ip::any_endpoint> peer_connection::get_endpoint_for_connecting() const
     {
-      if (inbound_port)
-        return fc::ip::endpoint(inbound_address, inbound_port);
-      return fc::optional<fc::ip::endpoint>();
+      // an unspecified address is what an IPv6 address becomes in the hello of the old format:
+      // an endpoint 0.0.0.0 in the peer database would make the node connect to itself
+      if (inbound_port && !inbound_address.is_unspecified())
+        return fc::ip::any_endpoint(inbound_address, inbound_port);
+      return fc::optional<fc::ip::any_endpoint>();
     }
 
 } } // end namespace graphene::net
