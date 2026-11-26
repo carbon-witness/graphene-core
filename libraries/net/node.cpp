@@ -1874,10 +1874,15 @@ namespace graphene { namespace net { namespace detail {
       originating_peer->our_state = peer_connection::our_connection_state::connection_accepted;
       originating_peer->send_message(address_request_message());
       fc::time_point now = fc::time_point::now();
-      // the IPv4 check needs a listener that takes IPv4 (0.0.0.0, [::] or an IPv4 address)
+      // The IPv4 check needs a listener that takes IPv4 (0.0.0.0, [::] or an IPv4 address), and
+      // a connection over IPv4: the helper checks the address it sees us at, and over IPv6 the
+      // old message cannot carry it, so the answer would always be "unable to check" while the
+      // IPv6 check waits for the peer
       const bool listening_on_ipv4 = !_actual_listening_endpoint.is_v6() ||
                                      _actual_listening_endpoint.get_address().is_unspecified();
-      if (listening_on_ipv4 &&
+      const fc::optional<fc::ip::any_endpoint> peer_endpoint = originating_peer->get_remote_endpoint();
+      const bool connected_over_ipv4 = peer_endpoint && peer_endpoint->is_v4();
+      if (listening_on_ipv4 && connected_over_ipv4 &&
           _is_firewalled == firewalled_state::unknown &&
           _last_firewall_check_message_sent < now - fc::minutes(5) &&
           originating_peer->core_protocol_version >= 106)
