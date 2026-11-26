@@ -599,6 +599,12 @@ namespace graphene { namespace net
 
     fc::optional<fc::ip::any_endpoint> peer_connection::get_endpoint_for_connecting() const
     {
+      // For a connection we opened, the address we connected to: that is the record of the
+      // peer database the connect loop retries, of either family. inbound_address and
+      // inbound_port hold our own values until the hello of the peer arrives, and an IPv6
+      // peer can only send 0.0.0.0 there.
+      if (direction == peer_connection_direction::outbound && _remote_endpoint)
+        return _remote_endpoint;
       // an unspecified address is what an IPv6 address becomes in the hello of the old format:
       // an endpoint 0.0.0.0 in the peer database would make the node connect to itself
       if (inbound_port && !inbound_address.is_unspecified())

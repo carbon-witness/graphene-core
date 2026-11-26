@@ -137,11 +137,11 @@ void application_impl::reset_p2p_node(const fc::path& data_dir)
    // A seed node is host:port, optionally as tls://host:port (connect over TLS right away) and
    // with ?sni=name (the name to send in TLS for a host given as an IP address)
    auto add_seed_node = [this]( const string& seed ) {
-      std::vector<fc::ip::endpoint> result;
+      std::vector<fc::ip::any_endpoint> result;
       try {
          seed_node_address address = parse_seed_node_address( seed );
-         std::vector<fc::ip::endpoint> endpoints = resolve_string_to_ip_endpoints( address.host_and_port );
-         for( const fc::ip::endpoint& endpoint : endpoints )
+         std::vector<fc::ip::any_endpoint> endpoints = resolve_string_to_ip_endpoints( address.host_and_port );
+         for( const fc::ip::any_endpoint& endpoint : endpoints )
          {
             ilog( "Adding seed node ${endpoint}", ("endpoint", endpoint) );
             if( address.tls || address.server_name )
@@ -157,12 +157,12 @@ void application_impl::reset_p2p_node(const fc::path& data_dir)
    };
 
    // Connections to --seed-node peers are opened once the P2P node is running, see below
-   std::vector<fc::ip::endpoint> seed_node_endpoints;
+   std::vector<fc::ip::any_endpoint> seed_node_endpoints;
    if( _options->count("seed-node") )
    {
       for( const string& seed : _options->at("seed-node").as<vector<string>>() )
       {
-         std::vector<fc::ip::endpoint> endpoints = add_seed_node( seed );
+         std::vector<fc::ip::any_endpoint> endpoints = add_seed_node( seed );
          seed_node_endpoints.insert( seed_node_endpoints.end(), endpoints.begin(), endpoints.end() );
       }
    }
@@ -184,7 +184,7 @@ void application_impl::reset_p2p_node(const fc::path& data_dir)
    }
 
    if( _options->count("p2p-endpoint") )
-      _p2p_network->listen_on_endpoint(fc::ip::endpoint::from_string(_options->at("p2p-endpoint").as<string>()), true);
+      _p2p_network->listen_on_endpoint(fc::ip::any_endpoint::from_string(_options->at("p2p-endpoint").as<string>()), true);
    else
       _p2p_network->listen_on_port(0, false);
    _p2p_network->listen_to_p2p_network();
@@ -199,7 +199,7 @@ void application_impl::reset_p2p_node(const fc::path& data_dir)
    // "not accepting any more incoming connections". A connection opened before that point
    // could get its hello answer too early, and the peer was then retried only after
    // GRAPHENE_NET_DEFAULT_PEER_CONNECTION_RETRY_TIME (30 s).
-   for( const fc::ip::endpoint& endpoint : seed_node_endpoints )
+   for( const fc::ip::any_endpoint& endpoint : seed_node_endpoints )
    {
       try {
          _p2p_network->connect_to_endpoint(endpoint);
@@ -238,31 +238,46 @@ seed_node_address parse_seed_node_address( const std::string& seed )
    result.host_and_port = rest;
    if( !result.server_name )
    {
-      // A host name goes into TLS as SNI; an IP address must not (RFC 6066)
-      std::string host = rest.substr( 0, rest.find( ':' ) );
+      // A host name goes into TLS as SNI; an IP address, IPv4 or IPv6, must not (RFC 6066)
+      std::string host = split_host_and_port( rest ).first;
       boost::system::error_code error;
-      boost::asio::ip::make_address_v4( host, error );
+      boost::asio::ip::make_address( host, error );
       if( error && !host.empty() )
          result.server_name = host;
    }
    return result;
 }
 
-std::vector<fc::ip::endpoint> application_impl::resolve_string_to_ip_endpoints(const std::string& endpoint_string)
+std::pair<std::string, std::string> split_host_and_port( const std::string& host_and_port )
+{
+   if( !host_and_port.empty() && host_and_port[0] == '[' )
+   {
+      std::string::size_type close = host_and_port.find( ']' );
+      FC_ASSERT( close != std::string::npos && close + 1 < host_and_port.size() && host_and_port[close + 1] == ':',
+                 "Expected [IPv6 address]:port in \"${s}\"", ("s", host_and_port) );
+      return { host_and_port.substr( 1, close - 1 ), host_and_port.substr( close + 2 ) };
+   }
+   std::string::size_type colon_pos = host_and_port.find( ':' );
+   FC_ASSERT( colon_pos != std::string::npos, "Missing required port number in endpoint string \"${s}\"",
+              ("s", host_and_port) );
+   FC_ASSERT( host_and_port.find( ':', colon_pos + 1 ) == std::string::npos,
+              "An IPv6 address must be in brackets: [address]:port, not \"${s}\"", ("s", host_and_port) );
+   return { host_and_port.substr( 0, colon_pos ), host_and_port.substr( colon_pos + 1 ) };
+}
+
+std::vector<fc::ip::any_endpoint> application_impl::resolve_string_to_ip_endpoints(const std::string& endpoint_string)
 {
    try
    {
-      string::size_type colon_pos = endpoint_string.find(':');
-      if (colon_pos == std::string::npos)
-         FC_THROW("Missing required port number in endpoint string \"${endpoint_string}\"",
-                  ("endpoint_string", endpoint_string));
-      std::string port_string = endpoint_string.substr(colon_pos + 1);
+      const auto host_and_port = split_host_and_port( endpoint_string );
+      const std::string& hostname = host_and_port.first;
+      const std::string& port_string = host_and_port.second;
       try
       {
          uint16_t port = boost::lexical_cast<uint16_t>(port_string);
 
-         std::string hostname = endpoint_string.substr(0, colon_pos);
-         std::vector<fc::ip::endpoint> endpoints = fc::resolve(hostname, port);
+         // A and AAAA records: IPv6 addresses too
+         std::vector<fc::ip::any_endpoint> endpoints = fc::resolve_any(hostname, port);
          if (endpoints.empty())
             FC_THROW_EXCEPTION( fc::unknown_host_exception,
                                 "The host name can not be resolved: ${hostname}",

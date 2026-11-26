@@ -8,6 +8,7 @@
 #include <graphene/chain/genesis_state.hpp>
 #include <graphene/protocol/types.hpp>
 #include <graphene/net/message.hpp>
+#include <fc/network/any_ip.hpp>
 
 namespace graphene { namespace app { namespace detail {
 
@@ -19,6 +20,8 @@ struct seed_node_address
    fc::optional<std::string> server_name;       ///< SNI: from ?sni=, or the host if it is a name
 };
 seed_node_address parse_seed_node_address( const std::string& seed );
+/// "host:port", "1.2.3.4:port" or "[2001:db8::1]:port" into the host (without brackets) and the port
+std::pair<std::string, std::string> split_host_and_port( const std::string& host_and_port );
 
 
 class application_impl : public net::node_delegate
@@ -31,7 +34,7 @@ class application_impl : public net::node_delegate
 
       void reset_p2p_node(const fc::path& data_dir);
 
-      std::vector<fc::ip::endpoint> resolve_string_to_ip_endpoints(const std::string& endpoint_string);
+      std::vector<fc::ip::any_endpoint> resolve_string_to_ip_endpoints(const std::string& endpoint_string);
 
       void new_connection( const fc::http::websocket_connection_ptr& c );
 
