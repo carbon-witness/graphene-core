@@ -125,7 +125,7 @@ command line take precedence over `config.ini`.
 
 | variable | option |
 |---|---|
-| `GRAPHENED_P2P_ENDPOINT` | `--p2p-endpoint`, default `0.0.0.0:1776` |
+| `GRAPHENED_P2P_ENDPOINT` | `--p2p-endpoint`, default `0.0.0.0:1776`: IPv4 and, where the system has it, IPv6 |
 | `GRAPHENED_RPC_ENDPOINT` | `--rpc-endpoint`, default `0.0.0.0:8090` |
 | `GRAPHENED_SEED_NODES` | `--seed-node`, space-separated list |
 | `GRAPHENED_PLUGINS` | `--plugins`, space-separated list |

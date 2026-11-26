@@ -1093,7 +1093,8 @@ void application::set_program_options(boost::program_options::options_descriptio
                                       boost::program_options::options_description& configuration_file_options) const
 {
    configuration_file_options.add_options()
-         ("p2p-endpoint", bpo::value<string>(), "Endpoint for P2P node to listen on")
+         ("p2p-endpoint", bpo::value<string>(), "Endpoint for P2P node to listen on: 1.2.3.4:1776 or [2001:db8::1]:1776; "
+          "on 0.0.0.0 or [::] the node takes IPv4 and IPv6 connections (IPv4 only on a system without IPv6)")
          ("seed-node,s", bpo::value<vector<string>>()->composing(),
           "P2P nodes to connect to on startup (may specify multiple times)")
          ("seed-nodes", bpo::value<string>()->composing(),

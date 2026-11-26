@@ -35,6 +35,8 @@
 #include <graphene/grouped_orders/grouped_orders_plugin.hpp>
 
 #include <fc/thread/thread.hpp>
+#include <fc/network/tcp_socket.hpp>
+#include <fc/network/any_ip.hpp>
 #include <fc/log/appender.hpp>
 #include <fc/log/logger.hpp>
 
@@ -556,8 +558,9 @@ struct p2p_test_node
 
    /// Listens on a port the OS picks: fixed ports may be taken on a CI machine
    p2p_test_node( const boost::filesystem::path& genesis_file,
-                  const std::vector<std::string>& seed_nodes, const std::string& tls_mode ) :
-      config( p2p_test_config( genesis_file, "127.0.0.1:0", seed_nodes, tls_mode ) )
+                  const std::vector<std::string>& seed_nodes, const std::string& tls_mode,
+                  const std::string& listen = "127.0.0.1:0" ) :
+      config( p2p_test_config( genesis_file, listen, seed_nodes, tls_mode ) )
    {
       app.startup_plugins();
       app.initialize( dir.path(), config );
@@ -568,6 +571,17 @@ struct p2p_test_node
 
    /// "127.0.0.1:port" this node listens on
    std::string address() { return app.p2p_node()->get_actual_listening_endpoint().to_string(); }
+
+   uint16_t port() { return app.p2p_node()->get_actual_listening_endpoint().port(); }
+
+   /// the addresses of the connected peers as this node sees them
+   std::set<std::string> peer_hosts()
+   {
+      std::set<std::string> hosts;
+      for( const auto& peer : app.p2p_node()->get_connected_peers() )
+         hosts.insert( peer.host.get_address().to_string() );
+      return hosts;
+   }
 
    /// "plain", or the TLS version, of the only connection
    std::string transport()
@@ -659,6 +673,81 @@ BOOST_AUTO_TEST_CASE( p2p_tls_always_does_not_fall_back )
       p2p_test_node client( genesis_file, { server.address() }, "always" );
       BOOST_CHECK( !wait_for( [&] { return client.connections() > 0u; }, fc::seconds(5) ) );
       BOOST_CHECK_EQUAL( server.connections(), 0u );
+   } catch( fc::exception& e ) {
+      BOOST_FAIL( e.to_detail_string() );
+   }
+}
+
+
+/// Whether this system can listen on the IPv6 loopback: the IPv6 tests are skipped without it
+static bool ipv6_loopback_available()
+{
+   try
+   {
+      fc::tcp_server probe;
+      probe.listen( fc::ip::any_endpoint::from_string( "[::1]:0" ), true );
+      return true;
+   }
+   catch( const fc::exception& )
+   {
+      return false;
+   }
+}
+
+/// Two new nodes over IPv6: TLS as over IPv4, the peer is seen at its IPv6 address, and the
+/// endpoint it lists in its hello ("listen_endpoints") gets it into the peer database although
+/// the address field of the hello cannot hold IPv6
+BOOST_AUTO_TEST_CASE( p2p_ipv6_with_tls )
+{
+   if( !ipv6_loopback_available() )
+   {
+      BOOST_TEST_MESSAGE( "no IPv6 on this system, p2p_ipv6_with_tls skipped" );
+      return;
+   }
+   try {
+      fc::temp_directory genesis_dir( graphene::utilities::temp_directory_path() );
+      const boost::filesystem::path genesis_file = create_genesis_file( genesis_dir );
+
+      p2p_test_node server( genesis_file, {}, "auto", "[::1]:0" );
+      BOOST_CHECK_EQUAL( server.address().substr( 0, 5 ), "[::1]" );
+      p2p_test_node client( genesis_file, { server.address() }, "auto", "[::1]:0" );
+      BOOST_REQUIRE( wait_for( [&] { return server.connections() == 1u && client.connections() == 1u; } ) );
+
+      BOOST_CHECK_EQUAL( client.transport().substr( 0, 3 ), "TLS" );
+      BOOST_CHECK( server.peer_hosts() == std::set<std::string>{ "::1" } );
+      BOOST_CHECK( client.peer_hosts() == std::set<std::string>{ "::1" } );
+
+      auto server_record = client.peer_record( server.address() );
+      BOOST_REQUIRE( server_record );
+      BOOST_CHECK( server_record->transport == net::transport_tls );
+      // the client connected from its listening port, at the address it listed
+      BOOST_CHECK( server.peer_record( client.address() ) );
+   } catch( fc::exception& e ) {
+      BOOST_FAIL( e.to_detail_string() );
+   }
+}
+
+/// A node listening on [::] takes IPv4 and IPv6 connections on the one port, and sees an IPv4
+/// peer at its IPv4 address, not as ::ffff:127.0.0.1
+BOOST_AUTO_TEST_CASE( p2p_dual_stack_listener )
+{
+   if( !ipv6_loopback_available() )
+   {
+      BOOST_TEST_MESSAGE( "no IPv6 on this system, p2p_dual_stack_listener skipped" );
+      return;
+   }
+   try {
+      fc::temp_directory genesis_dir( graphene::utilities::temp_directory_path() );
+      const boost::filesystem::path genesis_file = create_genesis_file( genesis_dir );
+
+      p2p_test_node server( genesis_file, {}, "auto", "0.0.0.0:0" );
+      BOOST_CHECK_EQUAL( server.address().substr( 0, 4 ), "[::]" );
+      const std::string port = std::to_string( server.port() );
+      p2p_test_node client4( genesis_file, { "127.0.0.1:" + port }, "auto", "127.0.0.1:0" );
+      p2p_test_node client6( genesis_file, { "[::1]:" + port }, "auto", "[::1]:0" );
+      BOOST_REQUIRE( wait_for( [&] { return server.connections() == 2u; } ) );
+
+      BOOST_CHECK( server.peer_hosts() == ( std::set<std::string>{ "127.0.0.1", "::1" } ) );
    } catch( fc::exception& e ) {
       BOOST_FAIL( e.to_detail_string() );
    }
