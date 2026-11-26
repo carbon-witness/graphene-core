@@ -1,7 +1,7 @@
 name: tests
 
 # Builds and runs the test suites; the docker and windows workflows build only the
-# binaries. app_test and cli_test run on every push to a work branch and on pull
+# binaries. any_ip_test (fc), app_test and cli_test run on every push to a work branch and on pull
 # requests. chain_test takes much longer to build and run: it runs on manual starts
 # (Run workflow, with "chain_test" checked) and for release tags.
 on:
@@ -81,7 +81,7 @@ jobs:
       - name: Build
         run: |
           ccache -z
-          targets="app_test cli_test"
+          targets="app_test cli_test any_ip_test"
           [ "$CHAIN_TEST" = true ] && targets="$targets chain_test"
           cmake --build build --parallel "$(nproc)" --target $targets
           ccache -s
@@ -93,7 +93,13 @@ jobs:
           path: .ccache
           key: tests-ccache-${{ github.ref_name }}-${{ github.sha }}
 
+      # fc: IPv4/IPv6 addresses and sockets
+      - name: any_ip_test
+        timeout-minutes: 5
+        run: ./build/libraries/fc/tests/any_ip_test --log_level=message --report_level=short
+
       - name: app_test
+        if: success() || failure()
         timeout-minutes: 20
         run: ./build/tests/app_test --log_level=message --report_level=short
 
