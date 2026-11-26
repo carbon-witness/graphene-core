@@ -65,6 +65,9 @@ namespace graphene { namespace net {
     fc::enum_type<uint8_t,potential_peer_transport> transport = transport_unknown;
     /// SNI for TLS connections to this peer, from a seed node given by name or with ?sni=
     fc::optional<std::string>         tls_server_name;
+    /// the other endpoints of the same node (e.g. its IPv4 address for an IPv6 one), from the
+    /// endpoints it listed in its hello
+    std::vector<fc::ip::any_endpoint> alternate_endpoints;
 
     potential_peer_record() :
       number_of_successful_connection_attempts(0),

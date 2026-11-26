@@ -28,6 +28,8 @@
 #include <graphene/chain/balance_object.hpp>
 
 #include <graphene/utilities/tempdir.hpp>
+#include <graphene/net/peer_database.hpp>
+#include <fc/io/json.hpp>
 
 #include <graphene/account_history/account_history_plugin.hpp>
 #include <graphene/market_history/market_history_plugin.hpp>
@@ -751,4 +753,49 @@ BOOST_AUTO_TEST_CASE( p2p_dual_stack_listener )
    } catch( fc::exception& e ) {
       BOOST_FAIL( e.to_detail_string() );
    }
+}
+
+/// The peer database keeps IPv6 records in peers_v6.json: peers.json stays readable by 1.2.1,
+/// which drops the whole file on an address it cannot parse. A bad record is skipped alone.
+BOOST_AUTO_TEST_CASE( peer_database_ipv6_file )
+{
+   fc::temp_directory td( graphene::utilities::temp_directory_path() );
+   const fc::path db_file = td.path() / "p2p" / "peers.json";
+   const fc::path v6_file = td.path() / "p2p" / "peers_v6.json";
+   const auto v4 = fc::ip::any_endpoint::from_string( "85.209.2.132:1776" );
+   const auto v6 = fc::ip::any_endpoint::from_string( "[2a09:5302:ffff::d5a]:1776" );
+   {
+      net::peer_database db;
+      db.open( db_file );
+      net::potential_peer_record record4 = db.lookup_or_create_entry_for_endpoint( v4 );
+      record4.alternate_endpoints = { v6 };
+      db.update_entry( record4 );
+      net::potential_peer_record record6 = db.lookup_or_create_entry_for_endpoint( v6 );
+      record6.alternate_endpoints = { v4 };
+      db.update_entry( record6 );
+      db.close();
+   }
+   const auto v4_records = fc::json::from_file( db_file ).get_array();
+   BOOST_REQUIRE_EQUAL( v4_records.size(), 1u );
+   BOOST_CHECK_EQUAL( v4_records[0]["endpoint"].as_string(), "85.209.2.132:1776" );
+   const auto v6_records = fc::json::from_file( v6_file ).get_array();
+   BOOST_REQUIRE_EQUAL( v6_records.size(), 1u );
+   BOOST_CHECK_EQUAL( v6_records[0]["endpoint"].as_string(), "[2a09:5302:ffff::d5a]:1776" );
+
+   // a record 1.2.1 could not read, as if written by hand into peers.json: only it is lost
+   fc::variants with_bad_record = v4_records;
+   fc::mutable_variant_object bad( v4_records[0].get_object() );
+   bad["endpoint"] = "not an endpoint";
+   with_bad_record.push_back( fc::variant( bad ) );
+   fc::json::save_to_file( with_bad_record, db_file );
+
+   net::peer_database reopened;
+   reopened.open( db_file );
+   BOOST_CHECK_EQUAL( reopened.size(), 2u );
+   auto record4 = reopened.lookup_entry_for_endpoint( v4 );
+   BOOST_REQUIRE( record4 );
+   BOOST_REQUIRE_EQUAL( record4->alternate_endpoints.size(), 1u );
+   BOOST_CHECK( record4->alternate_endpoints[0] == v6 );
+   BOOST_CHECK( reopened.lookup_entry_for_endpoint( v6 ) );
+   reopened.close();
 }

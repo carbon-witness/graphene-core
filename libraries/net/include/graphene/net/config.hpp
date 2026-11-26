@@ -48,6 +48,20 @@
 #define GRAPHENE_NET_MAX_LISTEN_ENDPOINTS                    8
 
 /**
+ * IPv6. A peer with IPv4 and IPv6 addresses is connected over IPv6 first; its IPv4 address is
+ * tried too if the IPv6 connection is not up after GRAPHENE_NET_IPV6_FALLBACK_DELAY_MS (the
+ * connect loop runs every 10 s, so in practice at its next pass).
+ * Our own IPv6 is taken as unusable while the system has no global IPv6 address (checked every
+ * GRAPHENE_NET_IPV6_ADDRESS_CHECK_SECONDS), and for GRAPHENE_NET_IPV6_RETRY_SECONDS after
+ * connections to GRAPHENE_NET_IPV6_FAILURES_TO_DISABLE different peers failed over IPv6 in a row
+ * while IPv4 worked; IPv6 peers are not tried while it is unusable.
+ */
+#define GRAPHENE_NET_IPV6_FALLBACK_DELAY_MS                  3000
+#define GRAPHENE_NET_IPV6_ADDRESS_CHECK_SECONDS              60
+#define GRAPHENE_NET_IPV6_FAILURES_TO_DISABLE                3
+#define GRAPHENE_NET_IPV6_RETRY_SECONDS                      600
+
+/**
  * AFter trying all peers, how long to wait before we check to
  * see if there are peers we can try again.
  */

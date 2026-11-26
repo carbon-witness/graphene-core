@@ -192,6 +192,15 @@ class node_impl : public peer_connection_delegate
       fc::time_point _advertised_listen_endpoints_time;
       /// false: IPv6 addresses are not advertised (--p2p-advertise-v6=false); outbound IPv6 still works
       bool _advertise_ipv6 = true;
+
+      /// @name Whether our IPv6 works, see GRAPHENE_NET_IPV6_* in config.hpp
+      /// @{
+      bool _ipv6_address = false;              ///< the system has a global IPv6 address
+      fc::time_point _ipv6_address_checked;
+      fc::time_point _ipv6_disabled_until;     ///< after failures to several peers
+      std::set<fc::ip::any_endpoint> _ipv6_failed_endpoints; ///< failed in a row, since the last success
+      fc::time_point _last_ipv4_success;
+      /// @}
       fc::time_point       _last_firewall_check_message_sent;
 
       /// used by the task that manages connecting to peers
@@ -388,6 +397,13 @@ class node_impl : public peer_connection_delegate
 
       fc::variant_object generate_hello_user_data();
       const std::vector<fc::ip::any_endpoint>& get_advertised_listen_endpoints();
+      bool is_ipv6_usable();
+      void note_connection_result(const fc::ip::any_endpoint& remote_endpoint, bool success);
+      /// an active or handshaking connection to the peer at that endpoint, outbound or inbound
+      peer_connection_ptr get_connection_to_peer_at(const fc::ip::any_endpoint& endpoint);
+      /// whether a connection to another endpoint of the same node makes this one unnecessary
+      bool is_connected_at_alternate_endpoint(const potential_peer_record& record);
+      void remember_listen_endpoints(const peer_connection* peer);
       void parse_hello_user_data_for_peer( peer_connection* originating_peer, const fc::variant_object& user_data );
 
       void on_message( peer_connection* originating_peer,
