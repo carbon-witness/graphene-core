@@ -889,7 +889,8 @@ BOOST_AUTO_TEST_CASE( p2p_two_listen_endpoints )
 }
 
 /// --p2p-advertise replaces the endpoints found automatically, --p2p-advertise-v6=false leaves
-/// out the IPv6 ones; the peer gets them in the hello
+/// out the IPv6 ones; the peer gets them in the hello. The advertised port is closed: the client
+/// tries it and is refused at once, rather than waiting for an address that does not answer.
 BOOST_AUTO_TEST_CASE( p2p_advertise_options )
 {
    try {
@@ -898,11 +899,11 @@ BOOST_AUTO_TEST_CASE( p2p_advertise_options )
 
       p2p_test_node server( genesis_file, {}, "auto", "127.0.0.1:0", []( bpo::variables_map& cfg ) {
          cfg.emplace( "p2p-advertise", bpo::variable_value(
-               std::vector<std::string>{ "[2001:db8::5]:1776", "198.51.100.7:1776" }, false ) );
+               std::vector<std::string>{ "[::1]:9", "127.0.0.1:9" }, false ) );
          cfg.emplace( "p2p-advertise-v6", bpo::variable_value( false, false ) );
       } );
       const auto advertised = server.app.p2p_node()->network_get_info()["advertised_endpoints"].as<std::vector<std::string>>( 2 );
-      BOOST_CHECK( advertised == std::vector<std::string>{ "198.51.100.7:1776" } );
+      BOOST_CHECK( advertised == std::vector<std::string>{ "127.0.0.1:9" } );
 
       p2p_test_node client( genesis_file, { server.address() }, "auto" );
       BOOST_REQUIRE( wait_for( [&] { return client.connections() == 1u; } ) );
@@ -910,7 +911,7 @@ BOOST_AUTO_TEST_CASE( p2p_advertise_options )
       BOOST_REQUIRE_EQUAL( peers.size(), 1u );
       BOOST_REQUIRE( peers.front().info.contains( "listen_endpoints" ) );
       BOOST_CHECK( peers.front().info["listen_endpoints"].as<std::vector<std::string>>( 2 ) ==
-                   std::vector<std::string>{ "198.51.100.7:1776" } );
+                   std::vector<std::string>{ "127.0.0.1:9" } );
    } catch( fc::exception& e ) {
       BOOST_FAIL( e.to_detail_string() );
    }
