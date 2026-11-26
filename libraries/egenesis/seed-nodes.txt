@@ -2,6 +2,7 @@
 "195.201.86.214:4646",          // blckchnd
 "78.46.200.101:1666",           // smailer
 "seed.graphene.fans:1776",      // traders-witness
+"ipv6seed.graphene.carbon-witness.net:1776",  // carbon-witness (IPv6)
 "37.27.115.162:1776",
 "95.217.59.180:4646",
 "65.109.67.61:4652",

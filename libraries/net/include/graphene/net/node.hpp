@@ -257,6 +257,25 @@ namespace graphene { namespace net {
         virtual fc::ip::any_endpoint get_actual_listening_endpoint() const;
 
         /**
+         * A further endpoint to accept connections on, besides the one of listen_on_endpoint,
+         * e.g. IPv4 and IPv6 on different ports. Call before listen_to_p2p_network().
+         */
+        void      add_listen_endpoint( const fc::ip::any_endpoint& ep );
+        /// all the endpoints the node listens on, the one of listen_on_endpoint first
+        std::vector<fc::ip::any_endpoint> get_listening_endpoints() const;
+
+        /**
+         * The endpoints peers are told to connect to ("listen_endpoints" in the hello), e.g. a
+         * public address behind NAT or a Docker network. Empty: found automatically.
+         */
+        void      set_advertised_endpoints( const std::vector<fc::ip::any_endpoint>& endpoints );
+        /**
+         * false: IPv6 endpoints are neither advertised nor checked for reachability; connections
+         * to IPv6 peers still work
+         */
+        void      set_advertise_ipv6( bool advertise );
+
+        /**
          *  @return a list of peers that are currently connected.
          */
         std::vector<peer_status> get_connected_peers() const;

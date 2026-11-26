@@ -183,10 +183,35 @@ void application_impl::reset_p2p_node(const fc::path& data_dir)
          add_seed_node( seed );
    }
 
+   // --p2p-endpoint may be given more than once (e.g. IPv4 and IPv6 on different ports); the
+   // tests set it as a single string
+   std::vector<std::string> p2p_endpoints;
    if( _options->count("p2p-endpoint") )
-      _p2p_network->listen_on_endpoint(fc::ip::any_endpoint::from_string(_options->at("p2p-endpoint").as<string>()), true);
+   {
+      const boost::any& value = _options->at("p2p-endpoint").value();
+      if( const auto* list = boost::any_cast<std::vector<std::string>>( &value ) )
+         p2p_endpoints = *list;
+      else
+         p2p_endpoints.push_back( boost::any_cast<std::string>( value ) );
+   }
+   if( !p2p_endpoints.empty() )
+   {
+      _p2p_network->listen_on_endpoint(fc::ip::any_endpoint::from_string(p2p_endpoints.front()), true);
+      for( size_t i = 1; i < p2p_endpoints.size(); ++i )
+         _p2p_network->add_listen_endpoint( fc::ip::any_endpoint::from_string(p2p_endpoints[i]) );
+   }
    else
       _p2p_network->listen_on_port(0, false);
+
+   if( _options->count("p2p-advertise") )
+   {
+      std::vector<fc::ip::any_endpoint> advertised;
+      for( const std::string& endpoint : _options->at("p2p-advertise").as<std::vector<std::string>>() )
+         advertised.push_back( fc::ip::any_endpoint::from_string( endpoint ) );
+      _p2p_network->set_advertised_endpoints( advertised );
+   }
+   if( _options->count("p2p-advertise-v6") )
+      _p2p_network->set_advertise_ipv6( _options->at("p2p-advertise-v6").as<bool>() );
    _p2p_network->listen_to_p2p_network();
    ilog("Configured p2p node to listen on ${ip}", ("ip", _p2p_network->get_actual_listening_endpoint()));
 
@@ -1093,8 +1118,16 @@ void application::set_program_options(boost::program_options::options_descriptio
                                       boost::program_options::options_description& configuration_file_options) const
 {
    configuration_file_options.add_options()
-         ("p2p-endpoint", bpo::value<string>(), "Endpoint for P2P node to listen on: 1.2.3.4:1776 or [2001:db8::1]:1776; "
-          "on 0.0.0.0 or [::] the node takes IPv4 and IPv6 connections (IPv4 only on a system without IPv6)")
+         ("p2p-endpoint", bpo::value<vector<string>>()->composing(),
+          "Endpoint for P2P node to listen on: 1.2.3.4:1776 or [2001:db8::1]:1776; "
+          "on 0.0.0.0 or [::] the node takes IPv4 and IPv6 connections (IPv4 only on a system without IPv6). "
+          "May be given more than once, e.g. for IPv4 and IPv6 on different ports")
+         ("p2p-advertise", bpo::value<vector<string>>()->composing(),
+          "Endpoint to tell peers to connect to, instead of the ones found automatically, e.g. the public address "
+          "of a node behind NAT or in a Docker network: 1.2.3.4:1776 or [2001:db8::1]:1776. May be given more than once")
+         ("p2p-advertise-v6", bpo::value<bool>()->default_value(true),
+          "Tell peers our IPv6 endpoints and check whether they can be reached; with false only IPv4 endpoints "
+          "are advertised (connections to IPv6 peers still work)")
          ("seed-node,s", bpo::value<vector<string>>()->composing(),
           "P2P nodes to connect to on startup (may specify multiple times)")
          ("seed-nodes", bpo::value<string>()->composing(),
