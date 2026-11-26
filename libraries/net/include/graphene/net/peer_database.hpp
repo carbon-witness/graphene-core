@@ -68,6 +68,9 @@ namespace graphene { namespace net {
     /// the other endpoints of the same node (e.g. its IPv4 address for an IPv6 one), from the
     /// endpoints it listed in its hello
     std::vector<fc::ip::any_endpoint> alternate_endpoints;
+    /// alternate_endpoints come from the hello of the node itself, not from another node's
+    /// address_v2_message (where they only order the attempts)
+    bool                              alternate_endpoints_confirmed = false;
 
     potential_peer_record() :
       number_of_successful_connection_attempts(0),

@@ -44,6 +44,9 @@ namespace graphene { namespace net {
   const core_message_type_enum current_time_reply_message::type              = core_message_type_enum::current_time_reply_message_type;
   const core_message_type_enum check_firewall_message::type                  = core_message_type_enum::check_firewall_message_type;
   const core_message_type_enum check_firewall_reply_message::type            = core_message_type_enum::check_firewall_reply_message_type;
+  const core_message_type_enum address_v2_message::type                      = core_message_type_enum::address_v2_message_type;
+  const core_message_type_enum check_firewall_v2_message::type               = core_message_type_enum::check_firewall_v2_message_type;
+  const core_message_type_enum check_firewall_v2_reply_message::type         = core_message_type_enum::check_firewall_v2_reply_message_type;
   const core_message_type_enum get_current_connections_request_message::type = core_message_type_enum::get_current_connections_request_message_type;
   const core_message_type_enum get_current_connections_reply_message::type   = core_message_type_enum::get_current_connections_reply_message_type;
 
@@ -109,6 +112,17 @@ FC_REFLECT_DERIVED_NO_TYPENAME(graphene::net::current_time_reply_message, BOOST_
 FC_REFLECT_DERIVED_NO_TYPENAME(graphene::net::check_firewall_message, BOOST_PP_SEQ_NIL, (node_id)(endpoint_to_check))
 FC_REFLECT_DERIVED_NO_TYPENAME(graphene::net::check_firewall_reply_message, BOOST_PP_SEQ_NIL,
                                 (node_id)(endpoint_checked)(result))
+FC_REFLECT_DERIVED_NO_TYPENAME( graphene::net::address_v2_info, BOOST_PP_SEQ_NIL,
+                                    (endpoints)
+                                    (last_seen_time)
+                                    (latency)
+                                    (node_id)
+                                    (direction)
+                                    (firewalled) )
+FC_REFLECT_DERIVED_NO_TYPENAME( graphene::net::address_v2_message, BOOST_PP_SEQ_NIL, (addresses) )
+FC_REFLECT_DERIVED_NO_TYPENAME(graphene::net::check_firewall_v2_message, BOOST_PP_SEQ_NIL, (node_id)(endpoint_to_check))
+FC_REFLECT_DERIVED_NO_TYPENAME(graphene::net::check_firewall_v2_reply_message, BOOST_PP_SEQ_NIL,
+                                (node_id)(endpoint_checked)(result))
 FC_REFLECT_DERIVED_NO_TYPENAME(graphene::net::get_current_connections_request_message,
                                 BOOST_PP_SEQ_NIL, BOOST_PP_SEQ_NIL)
 FC_REFLECT_DERIVED_NO_TYPENAME(graphene::net::current_connection_data, BOOST_PP_SEQ_NIL,
@@ -148,6 +162,10 @@ GRAPHENE_IMPLEMENT_EXTERNAL_SERIALIZATION( graphene::net::current_time_request_m
 GRAPHENE_IMPLEMENT_EXTERNAL_SERIALIZATION( graphene::net::current_time_reply_message )
 GRAPHENE_IMPLEMENT_EXTERNAL_SERIALIZATION( graphene::net::check_firewall_message )
 GRAPHENE_IMPLEMENT_EXTERNAL_SERIALIZATION( graphene::net::check_firewall_reply_message )
+GRAPHENE_IMPLEMENT_EXTERNAL_SERIALIZATION( graphene::net::address_v2_info )
+GRAPHENE_IMPLEMENT_EXTERNAL_SERIALIZATION( graphene::net::address_v2_message )
+GRAPHENE_IMPLEMENT_EXTERNAL_SERIALIZATION( graphene::net::check_firewall_v2_message )
+GRAPHENE_IMPLEMENT_EXTERNAL_SERIALIZATION( graphene::net::check_firewall_v2_reply_message )
 GRAPHENE_IMPLEMENT_EXTERNAL_SERIALIZATION( graphene::net::get_current_connections_request_message )
 GRAPHENE_IMPLEMENT_EXTERNAL_SERIALIZATION( graphene::net::current_connection_data )
 GRAPHENE_IMPLEMENT_EXTERNAL_SERIALIZATION( graphene::net::get_current_connections_reply_message )

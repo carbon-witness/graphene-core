@@ -202,6 +202,9 @@ class node_impl : public peer_connection_delegate
       fc::time_point _last_ipv4_success;
       /// @}
       fc::time_point       _last_firewall_check_message_sent;
+      /// whether our IPv6 endpoint can be reached, from check_firewall_v2 (the fields above are IPv4)
+      firewalled_state     _is_firewalled_v6 = firewalled_state::unknown;
+      fc::time_point       _firewall_check_v6_time; ///< of the last request, or of the last result
 
       /// used by the task that manages connecting to peers
       // @{
@@ -423,6 +426,10 @@ class node_impl : public peer_connection_delegate
 
       void on_address_message( peer_connection* originating_peer,
                                const address_message& address_message_received );
+      void on_address_v2_message( peer_connection* originating_peer,
+                                  const address_v2_message& address_v2_message_received );
+      /// the reply to our address request is the last step of the handshake
+      void on_addresses_received( peer_connection* originating_peer );
 
       void on_fetch_blockchain_item_ids_message( peer_connection* originating_peer,
                                                  const fetch_blockchain_item_ids_message& fetch_blockchain_item_ids_message_received );
@@ -455,6 +462,17 @@ class node_impl : public peer_connection_delegate
 
       void on_check_firewall_reply_message(peer_connection* originating_peer,
                                            const check_firewall_reply_message& check_firewall_reply_message_received);
+      void on_check_firewall_v2_message(peer_connection* originating_peer,
+                                        const check_firewall_v2_message& check_firewall_message_received);
+      void on_check_firewall_v2_reply_message(peer_connection* originating_peer,
+                                              const check_firewall_v2_reply_message& check_firewall_reply_message_received);
+      /// check_firewall and check_firewall_v2: v2 carries an endpoint of either family
+      void handle_check_firewall(peer_connection* originating_peer, const node_id_t& node_id,
+                                 const fc::ip::any_endpoint& endpoint_to_check, bool v2);
+      void handle_check_firewall_reply(peer_connection* originating_peer, const node_id_t& node_id,
+                                       const fc::ip::any_endpoint& endpoint_checked, firewall_check_result result, bool v2);
+      void send_firewall_check_reply(peer_connection* peer, const node_id_t& node_id,
+                                     const fc::ip::any_endpoint& endpoint, firewall_check_result result, bool v2);
 
       void on_get_current_connections_request_message(peer_connection* originating_peer,
                                                       const get_current_connections_request_message& get_current_connections_request_message_received);

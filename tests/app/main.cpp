@@ -799,3 +799,31 @@ BOOST_AUTO_TEST_CASE( peer_database_ipv6_file )
    BOOST_CHECK( reopened.lookup_entry_for_endpoint( v6 ) );
    reopened.close();
 }
+
+/// Nodes that announce "p2p_ipv6" exchange addresses with address_v2_message, which holds IPv6
+/// endpoints: address_message would carry them as 0.0.0.0. A learns the IPv6 endpoint of C
+/// from B.
+BOOST_AUTO_TEST_CASE( p2p_ipv6_address_exchange )
+{
+   if( !ipv6_loopback_available() )
+   {
+      BOOST_TEST_MESSAGE( "no IPv6 on this system, p2p_ipv6_address_exchange skipped" );
+      return;
+   }
+   try {
+      fc::temp_directory genesis_dir( graphene::utilities::temp_directory_path() );
+      const boost::filesystem::path genesis_file = create_genesis_file( genesis_dir );
+
+      p2p_test_node b( genesis_file, {}, "auto", "[::1]:0" );
+      p2p_test_node c( genesis_file, { b.address() }, "auto", "[::1]:0" );
+      BOOST_REQUIRE( wait_for( [&] { return b.connections() == 1u && c.connections() == 1u; } ) );
+
+      p2p_test_node a( genesis_file, { b.address() }, "auto", "[::1]:0" );
+      BOOST_CHECK( wait_for( [&] { return a.peer_record( c.address() ).valid(); } ) );
+      // and it can connect there
+      BOOST_CHECK( wait_for( [&] { return a.connections() == 2u; } ) );
+   } catch( fc::exception& e ) {
+      BOOST_FAIL( e.to_detail_string() );
+   }
+}
+

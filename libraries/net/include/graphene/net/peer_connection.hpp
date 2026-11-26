@@ -53,6 +53,9 @@ namespace graphene { namespace net
       // that means they have all had indeterminate results
       std::set<node_id_t> nodes_already_tested;
 
+      /// checked with check_firewall_v2_message (either family) rather than check_firewall_message
+      bool v2 = false;
+
       // If we're a just a helper node, this is the node we report back to
       // when we have a result
       node_id_t        requesting_peer;
@@ -216,6 +219,9 @@ namespace graphene { namespace net
       /// the endpoints the peer accepts connections on, IPv4 and IPv6, from "listen_endpoints"
       /// in the user data of its hello (new nodes only)
       std::vector<fc::ip::any_endpoint> listen_endpoints;
+      /// "p2p_ipv6" in the user data of its hello: the peer handles address_v2_message and
+      /// check_firewall_v2_message
+      bool supports_p2p_ipv6 = false;
       /// @}
 
       typedef std::unordered_map<item_id, fc::time_point> item_to_time_map_type;
