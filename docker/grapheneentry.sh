@@ -82,9 +82,19 @@ if [[ $# -gt 0 && "$1" != -* ]]; then
     run "$@"
 fi
 
+RPC_ENDPOINT="${GRAPHENED_RPC_ENDPOINT:-0.0.0.0:8090}"
+
+# With --network host there is no port publishing to limit the RPC to localhost: a
+# wildcard address opens it to the internet. The docker0 bridge is visible only in the
+# network of the host, not in the network of a container.
+if [[ -e /sys/class/net/docker0 && ( "$RPC_ENDPOINT" == 0.0.0.0:* || "$RPC_ENDPOINT" == "[::]:"* ) ]]; then
+    echo "grapheneentry: WARNING: the container uses the host network and the RPC listens on" \
+         "$RPC_ENDPOINT, reachable from outside; set GRAPHENED_RPC_ENDPOINT=127.0.0.1:8090" >&2
+fi
+
 ARGS=( --data-dir "$DATA_DIR"
        --p2p-endpoint "${GRAPHENED_P2P_ENDPOINT:-0.0.0.0:1776}"
-       --rpc-endpoint "${GRAPHENED_RPC_ENDPOINT:-0.0.0.0:8090}" )
+       --rpc-endpoint "$RPC_ENDPOINT" )
 
 for NODE in $GRAPHENED_SEED_NODES; do
     ARGS+=( --seed-node "$NODE" )
