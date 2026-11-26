@@ -469,7 +469,6 @@ namespace graphene { namespace net { namespace detail {
             _potential_peer_database_updated = false;
 
             // IPv6 addresses first, then IPv4: a node with both is connected over IPv6
-            const bool ipv6_usable = is_ipv6_usable();
             for (int pass = 0; pass < 2; ++pass)
             for (peer_database::iterator iter = _potential_peer_db.begin();
                  iter != _potential_peer_db.end() && is_wanting_new_connections();
@@ -477,7 +476,7 @@ namespace graphene { namespace net { namespace detail {
             {
               if (iter->endpoint.is_v6() != (pass == 0))
                 continue;
-              if (iter->endpoint.is_v6() && !ipv6_usable)
+              if (iter->endpoint.is_v6() && !is_ipv6_usable_for(iter->endpoint))
                 continue;
               if (is_connected_at_alternate_endpoint(*iter))
                 continue;
@@ -3664,7 +3663,7 @@ namespace graphene { namespace net { namespace detail {
         if (is_already_connected_to_id(node_id) ||
             is_connection_to_endpoint_in_progress(endpoint_to_check) ||
             endpoint_to_check.get_address().is_unspecified() ||
-            (endpoint_to_check.is_v6() && !is_ipv6_usable()))
+            (endpoint_to_check.is_v6() && !is_ipv6_usable_for(endpoint_to_check)))
         {
           send_firewall_check_reply(originating_peer, node_id, endpoint_to_check, firewall_check_result::unable_to_check, v2);
         }
@@ -4829,6 +4828,15 @@ namespace graphene { namespace net { namespace detail {
       return _ipv6_address && now >= _ipv6_disabled_until;
     }
 
+    bool node_impl::is_ipv6_usable_for(const fc::ip::any_endpoint& endpoint)
+    {
+      VERIFY_CORRECT_THREAD();
+      if (endpoint.get_address().is_public())
+        return is_ipv6_usable();
+      // a local network or this machine: no global address needed, a route is enough
+      return fc::local_address_towards(endpoint.get_address()).valid();
+    }
+
     void node_impl::note_connection_result(const fc::ip::any_endpoint& remote_endpoint, bool success)
     {
       VERIFY_CORRECT_THREAD();
@@ -4839,6 +4847,9 @@ namespace graphene { namespace net { namespace detail {
           _last_ipv4_success = now;
         return;
       }
+      // only connections over the internet tell whether our global IPv6 works
+      if (!remote_endpoint.get_address().is_public())
+        return;
       if (success)
       {
         if (now < _ipv6_disabled_until)
