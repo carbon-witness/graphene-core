@@ -280,7 +280,7 @@ BOOST_AUTO_TEST_CASE( two_node_network )
       wait_for( [&app1] { return app1.p2p_node()->get_connection_count() == 1u; } );
 
       BOOST_REQUIRE_EQUAL(app1.p2p_node()->get_connection_count(), 1u);
-      BOOST_CHECK_EQUAL(std::string(app1.p2p_node()->get_connected_peers().front().host.get_address()), "127.0.0.1");
+      BOOST_CHECK_EQUAL(app1.p2p_node()->get_connected_peers().front().host.get_address().to_string(), "127.0.0.1");
       BOOST_TEST_MESSAGE( "app1 and app2 successfully connected" );
 
       std::shared_ptr<chain::database> db1 = app1.chain_database();
@@ -536,7 +536,7 @@ struct p2p_test_node
    uint32_t connections() { return app.p2p_node()->get_connection_count(); }
 
    /// "127.0.0.1:port" this node listens on
-   std::string address() { return std::string( app.p2p_node()->get_actual_listening_endpoint() ); }
+   std::string address() { return app.p2p_node()->get_actual_listening_endpoint().to_string(); }
 
    /// "plain", or the TLS version, of the only connection
    std::string transport()
@@ -549,7 +549,7 @@ struct p2p_test_node
    fc::optional<net::potential_peer_record> peer_record( const std::string& endpoint )
    {
       for( const auto& record : app.p2p_node()->get_potential_peers() )
-         if( std::string(record.endpoint) == endpoint )
+         if( record.endpoint.to_string() == endpoint )
             return record;
       return {};
    }

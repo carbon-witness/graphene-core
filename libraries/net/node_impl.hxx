@@ -180,12 +180,12 @@ class node_impl : public peer_connection_delegate
       /// stores the endpoint we're listening on.  This will be the same as
       // _node_configuration.listen_endpoint, unless that endpoint was already
       // in use.
-      fc::ip::endpoint     _actual_listening_endpoint;
+      fc::ip::any_endpoint     _actual_listening_endpoint;
 
       /// we determine whether we're firewalled by asking other nodes.  Store the result here:
       firewalled_state     _is_firewalled;
       /// if we're behind NAT, our listening endpoint address will appear different to the rest of the world.  store it here.
-      fc::optional<fc::ip::endpoint> _publicly_visible_listening_endpoint;
+      fc::optional<fc::ip::any_endpoint> _publicly_visible_listening_endpoint;
       fc::time_point       _last_firewall_check_message_sent;
 
       /// used by the task that manages connecting to peers
@@ -460,14 +460,14 @@ class node_impl : public peer_connection_delegate
       void accept_connection_task(peer_connection_ptr new_peer);
       void accept_loop();
       void send_hello_message(const peer_connection_ptr& peer);
-      void connect_to_task(peer_connection_ptr new_peer, const fc::ip::endpoint& remote_endpoint);
-      bool is_connection_to_endpoint_in_progress(const fc::ip::endpoint& remote_endpoint);
+      void connect_to_task(peer_connection_ptr new_peer, const fc::ip::any_endpoint& remote_endpoint);
+      bool is_connection_to_endpoint_in_progress(const fc::ip::any_endpoint& remote_endpoint);
 
       void move_peer_to_active_list(const peer_connection_ptr& peer);
       void move_peer_to_closing_list(const peer_connection_ptr& peer);
       void move_peer_to_terminating_list(const peer_connection_ptr& peer);
 
-      peer_connection_ptr get_connection_to_endpoint( const fc::ip::endpoint& remote_endpoint );
+      peer_connection_ptr get_connection_to_endpoint( const fc::ip::any_endpoint& remote_endpoint );
 
       void dump_node_status();
 
@@ -484,16 +484,16 @@ class node_impl : public peer_connection_delegate
       void load_configuration( const fc::path& configuration_directory );
       void listen_to_p2p_network();
       void connect_to_p2p_network();
-      void add_node( const fc::ip::endpoint& ep );
+      void add_node( const fc::ip::any_endpoint& ep );
       void set_p2p_tls_options( const p2p_tls_options& options );
-      void set_peer_transport( const fc::ip::endpoint& ep, bool tls, const fc::optional<std::string>& server_name );
+      void set_peer_transport( const fc::ip::any_endpoint& ep, bool tls, const fc::optional<std::string>& server_name );
       void initiate_connect_to(const peer_connection_ptr& peer);
-      void connect_to_endpoint(const fc::ip::endpoint& ep);
-      void listen_on_endpoint(const fc::ip::endpoint& ep , bool wait_if_not_available);
+      void connect_to_endpoint(const fc::ip::any_endpoint& ep);
+      void listen_on_endpoint(const fc::ip::any_endpoint& ep , bool wait_if_not_available);
       void accept_incoming_connections(bool accept);
       void listen_on_port( uint16_t port, bool wait_if_not_available );
 
-      fc::ip::endpoint         get_actual_listening_endpoint() const;
+      fc::ip::any_endpoint         get_actual_listening_endpoint() const;
       std::vector<peer_status> get_connected_peers() const;
       uint32_t                 get_connection_count() const;
 

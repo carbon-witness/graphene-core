@@ -46,7 +46,7 @@ namespace graphene { namespace net
     struct firewall_check_state_data
     {
       node_id_t        expected_node_id;
-      fc::ip::endpoint endpoint_to_test;
+      fc::ip::any_endpoint endpoint_to_test;
 
       // if we're coordinating a firewall check for another node, these are the helper
       // nodes we've already had do the test (if this structure is still relevant, that
@@ -105,7 +105,7 @@ namespace graphene { namespace net
       };
     private:
       peer_connection_delegate*      _node;
-      fc::optional<fc::ip::endpoint> _remote_endpoint;
+      fc::optional<fc::ip::any_endpoint> _remote_endpoint;
       message_oriented_connection    _message_connection;
       std::shared_ptr<const tls_context> _tls_context;
 
@@ -210,7 +210,7 @@ namespace graphene { namespace net
       // for inbound connections, these fields record what the peer sent us in
       // its hello message.  For outbound, they record what we sent the peer
       // in our hello message
-      fc::ip::address inbound_address;
+      fc::ip::any_address inbound_address;
       uint16_t inbound_port = 0;
       uint16_t outbound_port = 0;
       /// @}
@@ -290,7 +290,7 @@ namespace graphene { namespace net
       bool tls_fell_back_to_plain = false;
 
       void accept_connection();
-      void connect_to(const fc::ip::endpoint& remote_endpoint, fc::optional<fc::ip::endpoint> local_endpoint = fc::optional<fc::ip::endpoint>());
+      void connect_to(const fc::ip::any_endpoint& remote_endpoint, fc::optional<fc::ip::any_endpoint> local_endpoint = fc::optional<fc::ip::any_endpoint>());
 
       void on_message(message_oriented_connection* originating_connection, const message& received_message) override;
       void on_connection_closed(message_oriented_connection* originating_connection) override;
@@ -307,9 +307,9 @@ namespace graphene { namespace net
       fc::time_point get_last_message_sent_time() const;
       fc::time_point get_last_message_received_time() const;
 
-      fc::optional<fc::ip::endpoint> get_remote_endpoint();
-      fc::ip::endpoint get_local_endpoint();
-      void set_remote_endpoint(fc::optional<fc::ip::endpoint> new_remote_endpoint);
+      fc::optional<fc::ip::any_endpoint> get_remote_endpoint();
+      fc::ip::any_endpoint get_local_endpoint();
+      void set_remote_endpoint(fc::optional<fc::ip::any_endpoint> new_remote_endpoint);
 
       bool busy() const;
       bool idle() const;
@@ -321,11 +321,11 @@ namespace graphene { namespace net
       bool is_inventory_advertised_to_us_list_full_for_transactions() const;
       bool is_inventory_advertised_to_us_list_full() const;
       bool performing_firewall_check() const;
-      fc::optional<fc::ip::endpoint> get_endpoint_for_connecting() const;
+      fc::optional<fc::ip::any_endpoint> get_endpoint_for_connecting() const;
     private:
       void send_queued_messages_task();
       void accept_connection_task();
-      void connect_to_task(const fc::ip::endpoint& remote_endpoint);
+      void connect_to_task(const fc::ip::any_endpoint& remote_endpoint);
     };
     typedef std::shared_ptr<peer_connection> peer_connection_ptr;
 

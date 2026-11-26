@@ -325,7 +325,7 @@ namespace graphene { namespace app {
           * @brief add_node Connect to a new peer
           * @param ep The IP/Port of the peer to connect to
           */
-         void add_node(const fc::ip::endpoint& ep);
+         void add_node(const fc::ip::any_endpoint& ep);
 
          /**
           * @brief Get status of all current connections to peers
