@@ -4001,7 +4001,12 @@ namespace graphene { namespace net { namespace detail {
         wlog( "Exception thrown while closing P2P peer database, ignoring" );
       }
 
-      // First, stop accepting incoming network connections
+      // First, stop accepting incoming network connections. The accept loops are canceled
+      // before their servers are closed: a loop that finds its server closed while not yet
+      // canceled retries accept() at once, which fails at once, and never yields again.
+      _accept_loop_complete.cancel("node_impl::close()");
+      for (const fc::future<void>& loop : _extra_accept_loops)
+        loop.cancel("node_impl::close()");
       try
       {
         _tcp_server.close();
