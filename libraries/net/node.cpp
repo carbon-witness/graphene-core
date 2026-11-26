@@ -4339,10 +4339,21 @@ namespace graphene { namespace net { namespace detail {
       VERIFY_CORRECT_THREAD();
       new_peer->set_tls( _tls_context, false );
       new_peer->accept_connection(); // this blocks until the secure connection is fully negotiated
-      // a peer reaching us over IPv6 shows that our IPv6 works
+      // a peer reaching us over IPv6 shows that our IPv6 works; from the internet (a public
+      // address), also that our IPv6 endpoint can be reached: no firewall check needed, and an
+      // endpoint a check found unreachable earlier is advertised again
       fc::optional<fc::ip::any_endpoint> remote_endpoint = new_peer->get_remote_endpoint();
       if (remote_endpoint && remote_endpoint->is_v6())
+      {
         note_connection_result(*remote_endpoint, true);
+        if (remote_endpoint->get_address().is_public() && _is_firewalled_v6 != firewalled_state::not_firewalled)
+        {
+          ilog("peer ${peer} connected to us over IPv6: our IPv6 endpoint can be reached", ("peer", *remote_endpoint));
+          _is_firewalled_v6 = firewalled_state::not_firewalled;
+          _firewall_check_v6_time = fc::time_point::now();
+          _advertised_listen_endpoints_time = fc::time_point();
+        }
+      }
       send_hello_message(new_peer);
     }
 
