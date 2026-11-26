@@ -9,6 +9,7 @@ Graphene Core
 
 
 * [Getting Started](#getting-started)
+* [P2P network](#p2p-network)
 * [Support](#support)
 * [Using the API](#using-the-api)
 * [Accessing restricted API's](#accessing-restricted-apis)
@@ -25,8 +26,9 @@ Information for developers can be found in the [Graphene Developer Portal](https
 
 Getting Started
 ---------------
-The current release is **1.2.1**; see [RELEASE_NOTES_1.2.1.md](RELEASE_NOTES_1.2.1.md) for the Windows node and app
-and its bug fixes. Since version 1.1, Graphene builds on a current toolchain: Ubuntu 26.04 LTS with GCC 15, CMake 4,
+The current release is **1.2.2**: IPv6 for P2P connections, TLS for P2P connections on the same port, and reconnecting
+within minutes after an outage of the node's own network; see [RELEASE_NOTES_1.2.2.md](RELEASE_NOTES_1.2.2.md). The
+Windows node and app came with 1.2.1 ([RELEASE_NOTES_1.2.1.md](RELEASE_NOTES_1.2.1.md)). Since version 1.1, Graphene builds on a current toolchain: Ubuntu 26.04 LTS with GCC 15, CMake 4,
 Boost 1.90 and OpenSSL 3.5. Version 1.0 built only on Ubuntu 18.04–20.04.
 
 There are five ways to get a node, from the quickest to the most flexible:
@@ -53,8 +55,8 @@ and the debug symbols of the stripped binaries are described in [README-docker.m
         -e GRAPHENED_RPC_ENDPOINT=127.0.0.1:8090 -v graphene-data:/var/lib/graphene \
         carbonwitness/graphene-core:latest
 
-`latest` is the newest release; every release is also tagged with its version, e.g. `1.2.0`, and release candidates
-only with theirs, e.g. `1.2.0-rc2`. The blockchain lives in the `graphene-data` volume. Keep `--stop-timeout 300`:
+`latest` is the newest release; every release is also tagged with its version, e.g. `1.2.2`, and release candidates
+only with theirs, e.g. `1.2.2-rc1`. The blockchain lives in the `graphene-data` volume. Keep `--stop-timeout 300`:
 the node needs time to write its database on exit, and a node killed before that replays the whole chain on the next
 start. `--network host` lets the node use the IPv4 and IPv6 addresses of the host; the RPC is then bound to localhost
 with `GRAPHENED_RPC_ENDPOINT`. Other network setups are described in [README-docker.md](README-docker.md#networking).
@@ -194,6 +196,38 @@ If you send private keys over this connection, `rpc-endpoint` should be bound to
 
 Use `help` to see all available wallet commands. Source definition and listing of all commands is available
 [here](https://github.com/bitshares/bitshares-core/blob/master/libraries/wallet/include/graphene/wallet/wallet.hpp).
+
+P2P network
+-----------
+The node talks to its peers on TCP port **1776**. Allow inbound connections to it, over IPv4 and, if the host has it,
+IPv6, in the firewall and the router: a node that accepts connections helps the network and keeps more peers.
+
+**IPv4 and IPv6.** With the default `p2p-endpoint = 0.0.0.0:1776` (or `[::]:1776`) the node listens on IPv4 and IPv6 on
+the one port; on a system without IPv6 it uses IPv4 only. It tells its peers the endpoints it can be reached at, its
+public IPv4 address and its global IPv6 address, and connects to a node that has both over IPv6. Old nodes keep
+talking to it over IPv4. An IPv6 endpoint that turns out to be unreachable from outside (a router that drops inbound
+IPv6) is not advertised, and the log says so.
+
+**TLS.** P2P connections go over TLS when both nodes support it, on the same port; with an old node the connection is
+plain, as before. This helps on networks whose DPI cuts the plain P2P protocol.
+
+**Docker** needs the host network (`--network host`) for IPv6: in Docker's default bridge network the container has no
+IPv6. See [README-docker.md](README-docker.md#networking).
+
+Options (in `config.ini` or on the command line):
+
+| Option | Meaning |
+|---|---|
+| `p2p-endpoint` | Endpoint to listen on: `0.0.0.0:1776` (IPv4 and IPv6), `1.2.3.4:1776`, `[2001:db8::1]:1776`. May be given more than once, e.g. IPv4 and IPv6 on different ports |
+| `p2p-advertise` | Endpoint to tell peers to connect to instead of the ones found automatically, e.g. the public address of a node behind NAT. May be given more than once |
+| `p2p-advertise-v6` | `true` (default); `false` advertises only IPv4 endpoints. Connections to IPv6 peers still work |
+| `p2p-tls` | `auto` (default): TLS with new nodes, plain with old ones; `always`: TLS only; `off`: plain only |
+| `p2p-tls-cert`, `p2p-tls-key` | Certificate and key in PEM; without them the node makes a self-signed certificate (peers authenticate each other by the P2P handshake, not by certificates) |
+| `seed-node` | A peer to connect to at startup: `host:port`, `1.2.3.4:1776`, `[2001:db8::1]:1776`, or `tls://host:port` to use TLS right away, with `?sni=name` for a host given as an IP address. May be given more than once |
+
+The node's view of the network (listening and advertised endpoints, whether it can be reached over IPv4 and IPv6, the
+connected peers with their transport) is in `network_node_api` (`get_info`, `get_connected_peers`), which has to be
+enabled for the caller in the API access file; see [Accessing restricted API's](#accessing-restricted-apis).
 
 Support
 -------
