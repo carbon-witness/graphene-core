@@ -1964,6 +1964,13 @@ namespace graphene { namespace net { namespace detail {
       VERIFY_CORRECT_THREAD();
       dlog("Received an address request message");
 
+      // A loopback endpoint (another node on the same machine) means nothing to a peer elsewhere
+      const fc::optional<fc::ip::any_endpoint> requester = originating_peer->get_remote_endpoint();
+      const bool requester_on_loopback = requester && requester->get_address().is_loopback();
+      auto useful_to_requester = [requester_on_loopback](const fc::ip::any_endpoint& e) {
+        return requester_on_loopback || !e.get_address().is_loopback();
+      };
+
       if (originating_peer->supports_p2p_ipv6)
       {
         address_v2_message reply;
@@ -1992,6 +1999,9 @@ namespace graphene { namespace net { namespace detail {
                 }
               }
             }
+            endpoints.erase(std::remove_if(endpoints.begin(), endpoints.end(),
+                                           [&](const fc::ip::any_endpoint& e) { return !useful_to_requester(e); }),
+                            endpoints.end());
             if (endpoints.empty())
               continue;
             std::stable_partition(endpoints.begin(), endpoints.end(),
@@ -2034,6 +2044,8 @@ namespace graphene { namespace net { namespace detail {
               continue;
             endpoint = *v4;
           }
+          if (!useful_to_requester(endpoint))
+            continue;
           reply.addresses.emplace_back(address_info(legacy_endpoint(endpoint),
                                                     fc::time_point::now(),
                                                     active_peer->round_trip_delay,
