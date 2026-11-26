@@ -49,25 +49,26 @@ and the debug symbols of the stripped binaries are described in [README-docker.m
 ### 1. Docker image from Docker Hub
 
     docker pull carbonwitness/graphene-core:latest
-    docker run -d --name graphene --stop-timeout 300 \
-        -v graphene-data:/var/lib/graphene -p 1776:1776 -p 127.0.0.1:8090:8090 \
+    docker run -d --name graphene --stop-timeout 300 --network host \
+        -e GRAPHENED_RPC_ENDPOINT=127.0.0.1:8090 -v graphene-data:/var/lib/graphene \
         carbonwitness/graphene-core:latest
 
 `latest` is the newest release; every release is also tagged with its version, e.g. `1.2.0`, and release candidates
 only with theirs, e.g. `1.2.0-rc2`. The blockchain lives in the `graphene-data` volume. Keep `--stop-timeout 300`:
 the node needs time to write its database on exit, and a node killed before that replays the whole chain on the next
-start.
+start. `--network host` lets the node use the IPv4 and IPv6 addresses of the host; the RPC is then bound to localhost
+with `GRAPHENED_RPC_ENDPOINT`. Other network setups are described in [README-docker.md](README-docker.md#networking).
 
-**On Windows with Docker Desktop**, run the same command in PowerShell, with `` ` `` instead of `\` at the line ends. Setting
-the node up in the Docker Desktop window is described in [README-docker.md](README-docker.md#windows-docker-desktop).
+**On Windows with Docker Desktop** the host network is not available in the same way: run the node in the bridge
+network, as described in [README-docker.md](README-docker.md#windows-docker-desktop).
 
 ### 2. Docker image from the GitHub Container Registry
 
 The same image as on Docker Hub, published by the same release workflow; use it if Docker Hub limits your pulls.
 
     docker pull ghcr.io/carbon-witness/graphene-core:latest
-    docker run -d --name graphene --stop-timeout 300 \
-        -v graphene-data:/var/lib/graphene -p 1776:1776 -p 127.0.0.1:8090:8090 \
+    docker run -d --name graphene --stop-timeout 300 --network host \
+        -e GRAPHENED_RPC_ENDPOINT=127.0.0.1:8090 -v graphene-data:/var/lib/graphene \
         ghcr.io/carbon-witness/graphene-core:latest
 
 ### 3. Docker image built from the Dockerfile
@@ -78,8 +79,8 @@ newer; the compiler and all libraries stay inside the build.
     git clone --recurse-submodules -b graphene https://github.com/carbon-witness/graphene-core.git
     cd graphene-core
     docker build -t graphene-core .
-    docker run -d --name graphene --stop-timeout 300 \
-        -v graphene-data:/var/lib/graphene -p 1776:1776 -p 127.0.0.1:8090:8090 \
+    docker run -d --name graphene --stop-timeout 300 --network host \
+        -e GRAPHENED_RPC_ENDPOINT=127.0.0.1:8090 -v graphene-data:/var/lib/graphene \
         graphene-core
 
 Every compiler process needs 1.5-2 GB of memory and the build runs one per CPU; on a machine with little memory add

@@ -10,12 +10,16 @@ to run it.
 
 or without compose:
 
-    docker run -d --name graphene --stop-timeout 300 \
+    docker run -d --name graphene --stop-timeout 300 --network host \
+        -e GRAPHENED_RPC_ENDPOINT=127.0.0.1:8090 \
         -v graphene-data:/var/lib/graphene \
-        -p 1776:1776 -p 127.0.0.1:8090:8090 \
         ghcr.io/carbon-witness/graphene-core:latest
 
 Things to keep in mind:
+
+* **Network.** The examples use the network of the host (`--network host`, in `compose.yml`
+  `network_mode: host`): the node listens on the addresses of the host, IPv4 and IPv6, and
+  sees the real addresses of its peers. See [Networking](#networking) for the bridge network.
 
 * **Stop timeout.** The node writes its object database to disk only when it exits
   cleanly on SIGINT, which takes a while. `docker stop` waits 10 seconds by default and
@@ -33,7 +37,11 @@ Things to keep in mind:
   pointed to the copy. Started with `--user`, the container does none of this. Commands
   run with `docker exec` start as root: add `-u graphene`, or files the wallet writes to
   the data directory end up owned by root.
-* **RPC.** The examples publish the websocket RPC port 8090 on localhost only.
+* **RPC.** The websocket RPC listens on `0.0.0.0:8090` inside the container by default.
+  With the host network nothing stands between that and the internet, so the examples set
+  `GRAPHENED_RPC_ENDPOINT=127.0.0.1:8090`; the entry point prints a warning if the container
+  runs in the host network with the RPC on a wildcard address. In a bridge network publish
+  the port on localhost only: `-p 127.0.0.1:8090:8090`.
 
 On the first start the node writes a default `config.ini` and `logging.ini` to the data
 directory. Edit them there and restart the container.
@@ -48,6 +56,39 @@ against a running node:
 
     docker exec -it -u graphene graphene cli_wallet -s ws://127.0.0.1:8090
     docker run --rm IMAGE get_dev_key <prefix> <seed>
+
+## Networking
+
+**Host network** (`--network host`), used by the examples above. The container shares the
+network of the host: the node listens on `1776` of the host directly, over IPv4 and, if the
+host has it, IPv6, connects to peers over both and sees their real addresses. Ports are not
+published in this mode (`-p` is ignored), so:
+
+* the RPC must be bound to localhost, `GRAPHENED_RPC_ENDPOINT=127.0.0.1:8090`;
+* two nodes on one host need different ports, `GRAPHENED_P2P_ENDPOINT`.
+
+**Bridge network without IPv6** (the Docker default, `-p 1776:1776 -p 127.0.0.1:8090:8090`).
+The node works over IPv4 only: the container has no IPv6 address. Docker still accepts IPv6
+connections on port 1776 of the host, but passes them to the container over IPv4 through its
+proxy, so such peers show up as `172.17.0.1` and their real addresses are lost.
+
+**Bridge network with IPv6.** A network created with IPv6 gives the container an IPv6
+address of its own, and inbound IPv6 connections keep their source address:
+
+    docker network create --ipv6 --subnet 2001:db8:1::/64 graphene-net
+    docker run -d --name graphene --stop-timeout 300 --network graphene-net \
+        -v graphene-data:/var/lib/graphene -p 1776:1776 -p 127.0.0.1:8090:8090 \
+        ghcr.io/carbon-witness/graphene-core:latest
+
+(in `compose.yml`: a network with `enable_ipv6: true`). The subnet should be a part of the
+public prefix of the host that the provider routes to the host. With a private subnet
+(`fd00::/8`, the default of `--ipv6` without `--subnet`) Docker translates outgoing IPv6
+connections to the address of the host, and the node does not know its public IPv6 address:
+give it with `GRAPHENED_ARGS="--p2p-advertise [<IPv6 of the host>]:1776"`.
+
+**Docker Desktop** (Windows, macOS) runs containers in a virtual machine, where the host
+network is not the network of your computer. Use the bridge network there, as in the
+[Windows](#windows-docker-desktop) section.
 
 ## Windows (Docker Desktop)
 

@@ -14,15 +14,27 @@ services:
     # longer than the default 10 s of `docker stop`. A SIGKILL before that leaves
     # the database unusable and the next start replays the whole chain (hours).
     stop_grace_period: 5m
-    ports:
-      - "1776:1776"
-      # RPC is reachable from this host only; publish it wider on purpose.
-      - "127.0.0.1:8090:8090"
-    volumes:
-      - graphene-data:/var/lib/graphene
-    # environment:
+
+    # Host networking: the node uses the addresses of the host directly, IPv4 and
+    # IPv6, and sees the real addresses of its peers. Ports are not published in
+    # this mode, so the RPC must listen on localhost, or it is open to the internet.
+    network_mode: host
+    environment:
+      GRAPHENED_RPC_ENDPOINT: "127.0.0.1:8090"
     #   GRAPHENED_SEED_NODES: "seed.graphene.fans:1776"
     #   GRAPHENED_PLUGINS: "witness account_history market_history grouped_orders api_helper_indexes"
+
+    # Bridge networking (Docker Desktop, or to keep the node in its own network):
+    # comment out network_mode and GRAPHENED_RPC_ENDPOINT above and uncomment ports.
+    # Without IPv6 enabled in Docker the node then works over IPv4 only, and peers
+    # that connect over IPv6 show up as 172.17.0.1. See README-docker.md.
+    # ports:
+    #   - "1776:1776"
+    #   # RPC is reachable from this host only; publish it wider on purpose.
+    #   - "127.0.0.1:8090:8090"
+
+    volumes:
+      - graphene-data:/var/lib/graphene
 
 volumes:
   graphene-data:
