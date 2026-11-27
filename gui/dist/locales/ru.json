@@ -118,7 +118,8 @@
   "col.direction": "Направление",
   "col.version": "Версия",
   "col.platform": "Платформа",
-  "col.peer_head": "Блок пира",
+  "col.transport": "Транспорт",
+  "col.peer_head": "Последний блок",
   "col.connected": "Подключён",
   "col.last_recv": "Последнее сообщение",
   "col.received": "Получено",
@@ -161,5 +162,10 @@
   "seeds.exists": "{addr} уже есть в списке",
   "seeds.state.handshaking": "идёт рукопожатие…",
   "dash.eta_left": "осталось ≈ {t}",
-  "about.versions": "Graphene Node {gui} · witness_node {node}"
+  "about.versions": "Graphene Node GUI {gui} · witness_node {node}",
+  "status.peers": "пиров {n} (TLS {tls})",
+  "status.ipv4_ipv6": "IPv4 + IPv6",
+  "status.ipv6_off": "IPv4, IPv6 нет",
+  "status.p2p": "P2P :{port}",
+  "status.node_unknown": "witness_node —"
 }

@@ -118,7 +118,8 @@
   "col.direction": "Direction",
   "col.version": "Version",
   "col.platform": "Platform",
-  "col.peer_head": "Peer's block",
+  "col.transport": "Transport",
+  "col.peer_head": "Last block",
   "col.connected": "Connected",
   "col.last_recv": "Last message",
   "col.received": "Received",
@@ -161,5 +162,10 @@
   "seeds.exists": "{addr} is already in the list",
   "seeds.state.handshaking": "handshaking…",
   "dash.eta_left": "≈ {t} left",
-  "about.versions": "Graphene Node {gui} · witness_node {node}"
+  "about.versions": "Graphene Node GUI {gui} · witness_node {node}",
+  "status.peers": "peers {n} (TLS {tls})",
+  "status.ipv4_ipv6": "IPv4 + IPv6",
+  "status.ipv6_off": "IPv4, no IPv6",
+  "status.p2p": "P2P :{port}",
+  "status.node_unknown": "witness_node —"
 }

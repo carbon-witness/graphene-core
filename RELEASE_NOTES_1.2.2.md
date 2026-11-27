@@ -41,6 +41,15 @@ the bridge network works over IPv4 only. Other setups, Docker Desktop included, 
 As in 1.2.1: `graphene-node-win64-1.2.2.zip` from the GitHub release, unpacked into one folder. `witness_node.exe` has
 all the P2P changes of this release.
 
+The app is **Graphene Node GUI 1.0.1** (was 1.0.0):
+- Seeds and Peers: a **Transport** column (`TLSv1.3` or `plain`); the column "Peer's block" is renamed **Last block**:
+  it is the newest block the node knows the peer has, not the peer's head.
+- A status bar at the bottom: the node's build, the app's version, peers and how many are under TLS, IPv6, the P2P port.
+- The window title has both versions: "Graphene Node GUI 1.0.1 · witness_node 1.2.2-…".
+
+The Windows node told its peers `platform: other`: the platform was detected by `_MSC_VER`, and the build is MinGW. It
+now says `win32` (with `bitness: 64`), as MSVC builds did.
+
 ### From source
 
 See [README.md](README.md#getting-started); the build is unchanged.

@@ -7,7 +7,7 @@
 use crate::i18n::{self, tr, trf};
 use crate::logtail::{LogStage, LogTail};
 use crate::api_access;
-use crate::rpc::{self, ChainInfo, Peer, PotentialPeer, Rpc, Stall};
+use crate::rpc::{self, ChainInfo, NetInfo, Peer, PotentialPeer, Rpc, Stall};
 use crate::seeds;
 use std::collections::HashMap;
 use crate::settings::Settings;
@@ -111,6 +111,8 @@ struct Inner {
     /// The app's API password for the running node; None when it has no account for the app
     rpc_password: Option<String>,
     peers: Option<Vec<Peer>>,
+    /// The node's P2P port and IPv6 state, for the status bar
+    net: Option<NetInfo>,
     /// Every endpoint the node knows of, with its last connection attempt
     potential: Option<Vec<PotentialPeer>>,
     /// Seed "host:port" to the IPv4 endpoints it resolved to
@@ -142,6 +144,8 @@ pub struct Status {
     pub synced: bool,
     /// Connected P2P peers; None when the list is not available (see peers_note)
     pub peers: Option<Vec<Peer>>,
+    /// The node's P2P port and IPv6 state; None until the API answers after a login
+    pub net: Option<NetInfo>,
     /// The built-in seeds, then the ones the user added
     pub seeds: Vec<SeedStatus>,
     pub peers_note: Option<String>,
@@ -213,6 +217,7 @@ impl Supervisor {
                 head_seen: None,
                 rpc_password: None,
                 peers: None,
+                net: None,
                 potential: None,
                 resolved: HashMap::new(),
                 pending_seeds: Vec::new(),
@@ -378,6 +383,7 @@ impl Supervisor {
                     i.chain_updated = None;
                     i.head_seen = None;
                     i.peers = None;
+                    i.net = None;
                     i.potential = None;
                     i.rpc_error = None;
                 }
@@ -411,6 +417,11 @@ impl Supervisor {
                     (Ok(_), Some(r)) if logged_in => Some(rpc::peers(r)),
                     _ => None,
                 };
+                // The listening port and the IPv6 state change rarely: every 10 s
+                let net = match (&result, rpc.as_mut()) {
+                    (Ok(_), Some(r)) if logged_in && round % 5 == 1 => rpc::net_info(r).ok(),
+                    _ => None,
+                };
                 // Seeds added since the last round, then every 10 s the node's list of known endpoints
                 let mut potential = None;
                 if let (Ok(_), Some(r), true) = (&result, rpc.as_mut(), logged_in) {
@@ -437,6 +448,9 @@ impl Supervisor {
                         i.rpc_error = None;
                         if potential.is_some() {
                             i.potential = potential;
+                        }
+                        if net.is_some() {
+                            i.net = net;
                         }
                         match peers {
                             Some(Ok(list)) => {
@@ -557,6 +571,7 @@ impl Inner {
         self.pending_seeds.clear();
         // An API account for the peer list, unless config.ini manages API access itself
         self.peers = None;
+        self.net = None;
         self.rpc_password = None;
         if api_access::config_sets_api_access(&s.data_dir) {
             self.peers_note = Some("peers.config_owns".into());
@@ -851,6 +866,7 @@ impl Inner {
             synced,
             no_blocks_seconds: no_blocks,
             peers: self.peers.clone(),
+            net: self.net.clone(),
             seeds: self.seed_status(),
             // An i18n key is translated; an error text from the node is shown as it is
             peers_note: self.peers_note.as_ref().map(|n| if n.starts_with("peers.") { tr(lang, n) } else { n.clone() }),

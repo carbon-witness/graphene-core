@@ -100,6 +100,8 @@ pub struct Peer {
     pub version: String,
     pub build: String,
     pub platform: String,
+    /// "TLSv1.3" or "plain"; empty for a node before 1.2.2, which does not say
+    pub transport: String,
     /// Unix seconds
     pub connected_since: i64,
     pub last_received: i64,
@@ -129,6 +131,7 @@ fn parse_peer(p: &Value) -> Peer {
         build: String::new(),
         user_agent: s("subver"),
         platform: s("platform"),
+        transport: s("transport"),
         connected_since: time("conntime"),
         last_received: time("lastrecv"),
         bytes_sent: n("bytessent"),
@@ -143,6 +146,25 @@ impl Peer {
         (self.version, self.build) = peer_version(&self.user_agent, fc_time);
         self
     }
+}
+
+/// The node's own P2P side, from network_node.get_info, for the status bar
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct NetInfo {
+    /// The port the node listens on for P2P connections
+    pub p2p_port: Option<u16>,
+    /// Whether the node has a working IPv6 address; None for a node before 1.2.2, which does not say
+    pub ipv6_usable: Option<bool>,
+}
+
+pub fn net_info(rpc: &mut Rpc) -> Result<NetInfo, String> {
+    Ok(parse_net_info(&rpc.call(json!("network_node"), "get_info", json!([]))?))
+}
+
+fn parse_net_info(v: &Value) -> NetInfo {
+    // "0.0.0.0:1776" or "[::]:1776"
+    let p2p_port = v.get("listening_on").and_then(Value::as_str).and_then(|s| s.rsplit(':').next()?.parse().ok());
+    NetInfo { p2p_port, ipv6_usable: v.get("ipv6_usable").and_then(Value::as_bool) }
 }
 
 /// An endpoint the node knows of, from network_node.get_potential_peers
@@ -306,12 +328,23 @@ mod tests {
         let p = parse_peer(&json!({"version": 0, "host": "1.2.3.4:1776", "info": {
             "addr": "1.2.3.4:1776", "inbound": false, "subver": "Graphene Reference Implementation",
             "platform": "linux", "conntime": "2026-10-04T10:00:00", "lastrecv": 1791108000,
-            "bytessent": 1200, "bytesrecv": "3400", "current_head_block_number": 55000000}}));
+            "bytessent": 1200, "bytesrecv": "3400", "current_head_block_number": 55000000,
+            "transport": "TLSv1.3"}}));
         assert_eq!(p.addr, "1.2.3.4:1776");
         assert!(!p.inbound);
         assert_eq!(p.connected_since, parse_time("2026-10-04T10:00:00").unwrap());
         assert_eq!(p.last_received, 1791108000);
         assert_eq!((p.bytes_sent, p.bytes_received, p.head_block), (1200, 3400, 55000000));
+        assert_eq!(p.transport, "TLSv1.3");
+    }
+
+    #[test]
+    fn reads_net_info() {
+        let n = parse_net_info(&json!({"listening_on": "[::]:1776", "ipv6_usable": true}));
+        assert_eq!((n.p2p_port, n.ipv6_usable), (Some(1776), Some(true)));
+        // a node before 1.2.2
+        let n = parse_net_info(&json!({"listening_on": "0.0.0.0:63594"}));
+        assert_eq!((n.p2p_port, n.ipv6_usable), (Some(63594), None));
     }
 
     #[test]

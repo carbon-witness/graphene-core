@@ -96,8 +96,17 @@ failed* or *not tried yet*. Hover over a failed status to see why.
 **Add seed** adds a node by `host:port`. It is written to `config.ini` in the data folder as `seed-node = host:port`
 and passed to the running node at once. Seeds added this way have a **remove** link.
 
-**Peers** are the nodes the node is connected to now, with their release and build. The node keeps up to 20
-connections; how many it gets depends on how many nodes are reachable.
+**Peers** are the nodes the node is connected to now, with their release and build. **Transport** is `TLSv1.3` for
+a connection under TLS (both nodes 1.2.2 or later) and `plain` otherwise; a dash for a node before 1.2.2. **Last block**
+is the newest block the node knows the peer has: it follows our own head while we sync from that peer, so it is not the
+peer's head. The node keeps up to 20 connections; how many it gets depends on how many nodes are reachable.
+
+### Status bar and window title
+
+The bar at the bottom of the window shows the node's build, the app's version, the number of peers and how many of them
+are under TLS, whether the node has a working IPv6 address, and its P2P port:
+`witness_node 1.2.2-… · GUI 1.0.1 · peers 3 (TLS 1) · IPv4 + IPv6 · P2P :1776`. The window title is
+"Graphene Node GUI 1.0.1 · witness_node 1.2.2-…", also in the taskbar.
 
 ### Settings
 
@@ -111,7 +120,8 @@ connections; how many it gets depends on how many nodes are reachable.
   the app then starts in the tray, without its window.
 * **Language**: English or Russian.
 
-At the bottom: the app's version and the node's build, which is also on the "Details" tab of each file's properties.
+At the bottom: the app's version and the node's build ("Graphene Node GUI 1.0.1 · witness_node 1.2.2-…"), which is
+also on the "Details" tab of each file's properties.
 
 ![Versions in the file properties](images/windows-gui/09-file-properties.png)
 

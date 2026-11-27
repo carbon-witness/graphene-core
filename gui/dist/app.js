@@ -168,6 +168,24 @@ function renderStatus(s) {
   $("peer-count").textContent = s.peers ? fmt(s.peers.length) : (running && s.peers_note) || "—";
   renderPeers(s);
   renderSeeds(s);
+  renderStatusBar(s);
+}
+
+// ---------- status bar and window title ----------
+// "witness_node 1.2.2-cea8e242 · GUI 1.0.1 · peers 3 (TLS 1) · IPv4 + IPv6 · P2P :1776"
+let versions = [null, null]; // [gui, node]
+function renderStatusBar(s) {
+  const [gui, node] = versions;
+  const parts = [node ? `witness_node ${node}` : t("status.node_unknown")];
+  if (gui) parts.push(`GUI ${gui}`);
+  if (s && s.pid != null && s.peers) {
+    parts.push(t("status.peers", { n: s.peers.length, tls: s.peers.filter((p) => p.transport.startsWith("TLS")).length }));
+  }
+  if (s && s.pid != null && s.net) {
+    if (s.net.ipv6_usable != null) parts.push(t(s.net.ipv6_usable ? "status.ipv4_ipv6" : "status.ipv6_off"));
+    if (s.net.p2p_port) parts.push(t("status.p2p", { port: s.net.p2p_port }));
+  }
+  $("statusbar").textContent = parts.join(" · ");
 }
 
 // ---------- peers ----------
@@ -194,7 +212,7 @@ function renderPeers(s) {
   body.replaceChildren(...[...peers].sort((a, b) => a.connected_since - b.connected_since).map((p) => {
     const tr = document.createElement("tr");
     for (const v of [p.addr, t(p.inbound ? "peers.inbound" : "peers.outbound"), p.version || "?", p.build || "?",
-                     p.platform || "—", fmt(p.head_block), ago(p.connected_since), ago(p.last_received),
+                     p.platform || "—", p.transport || "—", fmt(p.head_block), ago(p.connected_since), ago(p.last_received),
                      bytes(p.bytes_received), bytes(p.bytes_sent)]) {
       const td = document.createElement("td");
       td.textContent = v;
@@ -380,10 +398,16 @@ async function loadSettings() {
   return s;
 }
 
-// "Graphene Node 1.0.0 · witness_node 1.2.1-d80c6afe", also in the files' properties
+// "Graphene Node GUI 1.0.1 · witness_node 1.2.2-cea8e242": on the settings page, in the window title and
+// in the status bar
 async function showVersions() {
-  const [gui, node] = await invoke("get_versions").catch(() => [null, null]);
-  if (gui) $("versions").textContent = t("about.versions", { gui, node: node || "—" });
+  versions = await invoke("get_versions").catch(() => [null, null]);
+  const [gui, node] = versions;
+  if (!gui) return;
+  const text = t("about.versions", { gui, node: node || "—" });
+  $("versions").textContent = text;
+  window.__TAURI__.window.getCurrentWindow().setTitle(text).catch(() => {});
+  renderStatusBar(status);
 }
 form.rpc_endpoint.addEventListener("input", () => $("rpc-warning").classList.toggle("hidden", rpcIsLocal(form.rpc_endpoint.value)));
 form.addEventListener("submit", async (e) => {

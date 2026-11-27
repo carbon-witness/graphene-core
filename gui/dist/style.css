@@ -103,3 +103,7 @@ form select { align-self: flex-start; min-width: 200px; }
 
 /* The app's and the node's versions under the settings */
 .versions { margin-top: 24px; }
+
+/* Versions, peers, IPv6 and the P2P port at the bottom of the window */
+.statusbar { flex: none; padding: 4px 16px; border-top: 1px solid var(--line); background: var(--panel);
+  color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

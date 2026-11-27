@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "The main window",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:default", "clipboard-manager:allow-write-text", "opener:default"]
+  "permissions": ["core:default", "core:window:allow-set-title", "dialog:default", "clipboard-manager:allow-write-text", "opener:default"]
 }
