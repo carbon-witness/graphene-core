@@ -105,7 +105,8 @@ peer's head. The node keeps up to 20 connections; how many it gets depends on ho
 
 The bar at the bottom of the window shows the app's version, the node's build, the number of peers and how many of them
 are under TLS, and whether the node has a working IPv6 address:
-`Graphene Node GUI 1.0.1 · witness_node 1.2.2-… · peers 3 (TLS 1) · IPv4 + IPv6`. The window title is
+`Graphene Node GUI 1.0.1 · witness_node 1.2.2-… · peers 3 (TLS 1) · IPv4 + IPv6`. At its right, **+**, the zoom
+and **−** scale the window, as do Ctrl +, Ctrl − and Ctrl 0 (actual size); the window opens at the last zoom. The window title is
 "Graphene Node GUI 1.0.1 · witness_node 1.2.2-…", also in the taskbar.
 
 ### Settings

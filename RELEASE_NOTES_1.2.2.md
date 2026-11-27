@@ -46,6 +46,9 @@ The app is **Graphene Node GUI 1.0.1** (was 1.0.0):
   it is the newest block the node knows the peer has, not the peer's head.
 - A status bar at the bottom: the app's version, the node's build, peers and how many are under TLS, IPv6.
 - The window title has both versions: "Graphene Node GUI 1.0.1 · witness_node 1.2.2-…".
+- Zoom: [+] 100% [-] at the right of the status bar, and Ctrl +, Ctrl −, Ctrl 0; the window opens at the last zoom.
+- A seed resolves to its IPv6 addresses too: `ipv6seed.graphene.carbon-witness.net` (an AAAA record only) showed
+  "name not resolved" although the node was connected to it.
 
 The Windows node told its peers `platform: other`: the platform was detected by `_MSC_VER`, and the build is MinGW. It
 now says `win32` (with `bitness: 64`), as MSVC builds did.
@@ -76,7 +79,8 @@ The address field of the P2P hello holds one IPv4 address. A new node also lists
 on, `listen_endpoints` in the user data of its hello, which old nodes ignore. On a wildcard address these are:
 
 - the public IPv4 endpoint the firewall check found (behind NAT), or the IPv4 address of the host if it is public;
-- the global IPv6 address of the host (on Linux a stable one rather than a temporary privacy address).
+- the global IPv6 address of the host (on Linux and Windows a stable one rather than a temporary privacy address,
+  which the system changes daily).
 
 A peer that lists an endpoint at the address we see it connect from counts as reachable and goes into the peer
 database. Without this an IPv6 peer, whose hello can only carry `0.0.0.0`, was always taken for firewalled.

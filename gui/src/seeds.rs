@@ -5,7 +5,7 @@
 //! the node reads them at every start; a running node also gets them at once through network_node.add_node.
 //! A "seed-nodes = [...]" entry in config.ini replaces the built-in list.
 
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::ToSocketAddrs;
 use std::path::Path;
 
 const SEED_NODES_TXT: &str = include_str!("../../libraries/egenesis/seed-nodes.txt");
@@ -35,11 +35,10 @@ pub fn is_valid(addr: &str) -> bool {
     }
 }
 
-/// The IPv4 endpoints a seed resolves to, as the node writes them ("1.2.3.4:1776"); the node's P2P is IPv4 only.
+/// The endpoints a seed resolves to, IPv4 and IPv6, as the node writes them: "1.2.3.4:1776",
+/// "[2001:db8::1]:1776". A seed with only an AAAA record (ipv6seed...) resolves where the system has IPv6.
 pub fn resolve(addr: &str) -> Vec<String> {
-    addr.to_socket_addrs()
-        .map(|it| it.filter(SocketAddr::is_ipv4).map(|a| a.to_string()).collect())
-        .unwrap_or_default()
+    addr.to_socket_addrs().map(|it| it.map(|a| a.to_string()).collect()).unwrap_or_default()
 }
 
 /// The value of an active (not commented out) "key = value" line of config.ini
@@ -159,6 +158,7 @@ mod tests {
     fn checks_addresses() {
         assert!(is_valid("1.2.3.4:1776"));
         assert!(is_valid("seed.example.org:4646"));
+        assert!(is_valid("[2001:db8::1]:1776"));
         assert!(!is_valid("1.2.3.4"));
         assert!(!is_valid("1.2.3.4:0"));
         assert!(!is_valid("1.2.3.4:70000"));
@@ -169,5 +169,7 @@ mod tests {
     #[test]
     fn resolves_an_ip() {
         assert_eq!(resolve("1.2.3.4:1776"), vec!["1.2.3.4:1776".to_string()]);
+        // the node lists an IPv6 peer the same way
+        assert_eq!(resolve("[2001:db8::1]:1776"), vec!["[2001:db8::1]:1776".to_string()]);
     }
 }

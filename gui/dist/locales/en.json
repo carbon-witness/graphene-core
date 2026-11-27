@@ -166,5 +166,8 @@
   "status.peers": "peers {n} (TLS {tls})",
   "status.ipv4_ipv6": "IPv4 + IPv6",
   "status.ipv6_off": "IPv4, no IPv6",
-  "status.node_unknown": "witness_node —"
+  "status.node_unknown": "witness_node —",
+  "zoom.in": "Zoom in (Ctrl +)",
+  "zoom.out": "Zoom out (Ctrl −)",
+  "zoom.reset": "Actual size (Ctrl 0)"
 }

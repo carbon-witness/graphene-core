@@ -115,7 +115,7 @@ struct Inner {
     net: Option<NetInfo>,
     /// Every endpoint the node knows of, with its last connection attempt
     potential: Option<Vec<PotentialPeer>>,
-    /// Seed "host:port" to the IPv4 endpoints it resolved to
+    /// Seed "host:port" to the IPv4 and IPv6 endpoints it resolved to
     resolved: HashMap<String, Vec<String>>,
     /// Seeds added while the node runs, still to be passed to it
     pending_seeds: Vec<String>,

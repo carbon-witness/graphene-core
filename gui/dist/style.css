@@ -105,5 +105,12 @@ form select { align-self: flex-start; min-width: 200px; }
 .versions { margin-top: 24px; }
 
 /* Versions, peers, IPv6 and the P2P port at the bottom of the window */
-.statusbar { flex: none; padding: 4px 16px; border-top: 1px solid var(--line); background: var(--panel);
-  color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.statusbar { flex: none; display: flex; align-items: center; gap: 12px; padding: 2px 8px 2px 16px;
+  border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 12px; }
+#statusbar { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Zoom: [+] 100% [-] */
+.zoom { flex: none; display: inline-flex; align-items: center; gap: 2px; }
+.zoom button { padding: 0 6px; min-width: 22px; border-color: transparent; background: none; color: var(--muted);
+  font-size: 12px; line-height: 18px; }
+.zoom button:hover { border-color: var(--line); color: var(--text); }
+#zoom-reset { min-width: 44px; font-variant-numeric: tabular-nums; }

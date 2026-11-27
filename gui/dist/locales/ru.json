@@ -166,5 +166,8 @@
   "status.peers": "пиров {n} (TLS {tls})",
   "status.ipv4_ipv6": "IPv4 + IPv6",
   "status.ipv6_off": "IPv4, IPv6 нет",
-  "status.node_unknown": "witness_node —"
+  "status.node_unknown": "witness_node —",
+  "zoom.in": "Увеличить (Ctrl +)",
+  "zoom.out": "Уменьшить (Ctrl −)",
+  "zoom.reset": "Исходный размер (Ctrl 0)"
 }

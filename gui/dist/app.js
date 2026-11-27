@@ -46,6 +46,7 @@ async function setLanguage(lang) {
   document.documentElement.lang = lang;
   document.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = t(el.dataset.i18n)));
   document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => (el.placeholder = t(el.dataset.i18nPlaceholder)));
+  document.querySelectorAll("[data-i18n-title]").forEach((el) => (el.title = t(el.dataset.i18nTitle)));
   if (status) renderStatus(status);
   renderJournalStatus();
   renderJournal(true);
@@ -431,6 +432,37 @@ form.addEventListener("submit", async (e) => {
       await ask(t("dlg.restart_after_save"), { title: "Graphene Node", kind: "info" }))
     call("node_restart");
 });
+
+// ---------- zoom ----------
+// [+] 100% [-] in the status bar and Ctrl +, Ctrl -, Ctrl 0, as in a browser. The webview's own zoom keys are off
+// (zoomHotkeysEnabled is false by default), so the figure in the status bar is always the real one.
+// Kept in the webview's storage, so the window opens at the last zoom.
+const ZOOM_STEPS = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200];
+let zoom = 100;
+function setZoom(pct) {
+  zoom = Math.min(200, Math.max(50, pct));
+  window.__TAURI__.webview.getCurrentWebview().setZoom(zoom / 100).catch(showError);
+  $("zoom-reset").textContent = `${zoom}%`;
+  try { localStorage.setItem("zoom", String(zoom)); } catch (e) { /* no storage: the zoom is not kept */ }
+}
+function stepZoom(dir) {
+  const next = dir > 0 ? ZOOM_STEPS.find((z) => z > zoom) : [...ZOOM_STEPS].reverse().find((z) => z < zoom);
+  if (next) setZoom(next);
+}
+$("zoom-in").onclick = () => stepZoom(1);
+$("zoom-out").onclick = () => stepZoom(-1);
+$("zoom-reset").onclick = () => setZoom(100);
+document.addEventListener("keydown", (e) => {
+  if (!e.ctrlKey || e.altKey || e.metaKey) return;
+  // "+" is Shift+"=" on the main keyboard; the numeric keypad gives "+" and "-" directly
+  if (e.key === "+" || e.key === "=") stepZoom(1);
+  else if (e.key === "-" || e.key === "_") stepZoom(-1);
+  else if (e.key === "0") setZoom(100);
+  else return;
+  e.preventDefault();
+});
+try { const saved = Number(localStorage.getItem("zoom")); if (ZOOM_STEPS.includes(saved) && saved !== 100) setZoom(saved); }
+catch (e) { /* no storage */ }
 
 // ---------- loop ----------
 async function tick() {

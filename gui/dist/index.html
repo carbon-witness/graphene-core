@@ -122,7 +122,14 @@
     <p class="hint versions" id="versions"></p>
   </section>
 </main>
-<footer id="statusbar" class="statusbar"></footer>
+<footer class="statusbar">
+  <span id="statusbar"></span>
+  <span class="zoom">
+    <button id="zoom-in" data-i18n-title="zoom.in" title="Zoom in (Ctrl +)">+</button>
+    <button id="zoom-reset" data-i18n-title="zoom.reset" title="Actual size (Ctrl 0)">100%</button>
+    <button id="zoom-out" data-i18n-title="zoom.out" title="Zoom out (Ctrl −)">−</button>
+  </span>
+</footer>
 <script src="app.js"></script>
 </body>
 </html>
