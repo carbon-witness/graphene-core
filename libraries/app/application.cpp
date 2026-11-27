@@ -45,6 +45,9 @@
 #include <fc/rpc/api_connection.hpp>
 #include <fc/rpc/websocket_api.hpp>
 #include <fc/network/resolve.hpp>
+#include <fc/network/local_address.hpp>
+
+#include <algorithm>
 #include <fc/crypto/base64.hpp>
 
 #include <boost/filesystem/path.hpp>
@@ -290,6 +293,17 @@ std::pair<std::string, std::string> split_host_and_port( const std::string& host
    return { host_and_port.substr( 0, colon_pos ), host_and_port.substr( colon_pos + 1 ) };
 }
 
+std::vector<fc::ip::any_endpoint> without_nat64( std::vector<fc::ip::any_endpoint> endpoints, bool ipv4_works )
+{
+   const bool has_ipv4 = std::any_of( endpoints.begin(), endpoints.end(),
+                                      []( const fc::ip::any_endpoint& e ) { return e.is_v4(); } );
+   if( has_ipv4 && ipv4_works )
+      endpoints.erase( std::remove_if( endpoints.begin(), endpoints.end(),
+                                       []( const fc::ip::any_endpoint& e ) { return e.get_address().is_nat64(); } ),
+                       endpoints.end() );
+   return endpoints;
+}
+
 std::vector<fc::ip::any_endpoint> application_impl::resolve_string_to_ip_endpoints(const std::string& endpoint_string)
 {
    try
@@ -307,7 +321,11 @@ std::vector<fc::ip::any_endpoint> application_impl::resolve_string_to_ip_endpoin
             FC_THROW_EXCEPTION( fc::unknown_host_exception,
                                 "The host name can not be resolved: ${hostname}",
                                 ("hostname", hostname) );
-         return endpoints;
+         // IPv4 works when the system has a route to the name's IPv4 address
+         auto v4 = std::find_if( endpoints.begin(), endpoints.end(),
+                                 []( const fc::ip::any_endpoint& e ) { return e.is_v4(); } );
+         const bool ipv4_works = v4 != endpoints.end() && fc::local_address_towards( v4->get_address() ).valid();
+         return without_nat64( std::move(endpoints), ipv4_works );
       }
       catch (const boost::bad_lexical_cast&)
       {

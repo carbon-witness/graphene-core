@@ -22,6 +22,11 @@ struct seed_node_address
 seed_node_address parse_seed_node_address( const std::string& seed );
 /// "host:port", "1.2.3.4:port" or "[2001:db8::1]:port" into the host (without brackets) and the port
 std::pair<std::string, std::string> split_host_and_port( const std::string& host_and_port );
+/// The resolved endpoints of a name without its NAT64 addresses (64:ff9b::a.b.c.d, which a DNS64 resolver adds
+/// for every A record) when the name has an IPv4 address and @p ipv4_works. A NAT64 address is not a global
+/// IPv6 address of the peer but a way to its IPv4 one through the network operator's gateway; on an IPv6-only
+/// network it is the only way, and is kept.
+std::vector<fc::ip::any_endpoint> without_nat64( std::vector<fc::ip::any_endpoint> endpoints, bool ipv4_works );
 
 
 class application_impl : public net::node_delegate

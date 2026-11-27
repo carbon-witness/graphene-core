@@ -113,7 +113,10 @@ namespace graphene { namespace net {
         {
           try
           {
-            _potential_peer_set.insert(record.as<potential_peer_record>(GRAPHENE_NET_MAX_NESTED_OBJECTS));
+            potential_peer_record peer = record.as<potential_peer_record>(GRAPHENE_NET_MAX_NESTED_OBJECTS);
+            // not kept any more (see close()); a file of an earlier build may have them
+            if (!peer.endpoint.get_address().is_nat64())
+              _potential_peer_set.insert(peer);
           }
           catch (const fc::exception& e)
           {
@@ -173,7 +176,14 @@ namespace graphene { namespace net {
       std::vector<potential_peer_record> v6_records;
       v4_records.reserve(_potential_peer_set.size());
       for (const potential_peer_record& record : _potential_peer_set)
+      {
+        // A NAT64 address (64:ff9b::a.b.c.d, from a DNS64 resolver) is the way to an IPv4 node through the
+        // gateway of the network we are on now; on another network it leads nowhere. The node gets it again
+        // by resolving the seed where it is needed, so it is not kept.
+        if (record.endpoint.get_address().is_nat64())
+          continue;
         (record.endpoint.is_v6() ? v6_records : v4_records).push_back(record);
+      }
 
       save_file(_peer_database_filename, v4_records);
       const fc::path v6_file = ipv6_file_name(_peer_database_filename);

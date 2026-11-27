@@ -562,6 +562,26 @@ BOOST_AUTO_TEST_CASE( seed_node_address_parsing )
    BOOST_CHECK_EQUAL( *v6_name.server_name, "ipv6seed.graphene.carbon-witness.net" );
 }
 
+BOOST_AUTO_TEST_CASE( nat64_addresses_of_a_seed )
+{
+   using graphene::app::detail::without_nat64;
+   using fc::ip::any_endpoint;
+   // seed.graphene.fans through a DNS64 resolver: its A record and the synthesized AAAA
+   const any_endpoint v4 = any_endpoint::from_string( "139.28.170.7:1776" );
+   const any_endpoint nat64 = any_endpoint::from_string( "[64:ff9b::8b1c:aa07]:1776" );
+   const any_endpoint v6 = any_endpoint::from_string( "[2a09:5302:ffff::d5a]:1776" );
+
+   // IPv4 works: the IPv4 address itself, not the way to it through the gateway; a real IPv6 address stays
+   auto kept = without_nat64( { nat64, v4, v6 }, true );
+   BOOST_REQUIRE_EQUAL( kept.size(), 2u );
+   BOOST_CHECK( kept[0] == v4 );
+   BOOST_CHECK( kept[1] == v6 );
+   // an IPv6-only network: NAT64 is the only way to an IPv4 node
+   BOOST_CHECK_EQUAL( without_nat64( { nat64, v4 }, false ).size(), 2u );
+   // only a NAT64 address (a name given as one): nothing to replace it with
+   BOOST_CHECK_EQUAL( without_nat64( { nat64 }, true ).size(), 1u );
+}
+
 BOOST_AUTO_TEST_CASE( host_and_port_splitting )
 {
    using graphene::app::detail::split_host_and_port;
@@ -824,6 +844,38 @@ BOOST_AUTO_TEST_CASE( peer_database_ipv6_file )
    BOOST_REQUIRE( record4 );
    BOOST_REQUIRE_EQUAL( record4->alternate_endpoints.size(), 1u );
    BOOST_CHECK( record4->alternate_endpoints[0] == v6 );
+   BOOST_CHECK( reopened.lookup_entry_for_endpoint( v6 ) );
+   reopened.close();
+}
+
+/// A NAT64 address (from a DNS64 resolver) is only good on the network that has the gateway:
+/// the peer database neither saves it nor loads it from a file of an earlier build.
+BOOST_AUTO_TEST_CASE( peer_database_drops_nat64 )
+{
+   fc::temp_directory td( graphene::utilities::temp_directory_path() );
+   const fc::path db_file = td.path() / "p2p" / "peers.json";
+   const fc::path v6_file = td.path() / "p2p" / "peers_v6.json";
+   const auto nat64 = fc::ip::any_endpoint::from_string( "[64:ff9b::8b1c:aa07]:1776" );
+   const auto v6 = fc::ip::any_endpoint::from_string( "[2a09:5302:ffff::d5a]:1776" );
+   {
+      net::peer_database db;
+      db.open( db_file );
+      db.update_entry( db.lookup_or_create_entry_for_endpoint( nat64 ) );
+      db.update_entry( db.lookup_or_create_entry_for_endpoint( v6 ) );
+      db.close();
+   }
+   const auto saved = fc::json::from_file( v6_file ).get_array();
+   BOOST_REQUIRE_EQUAL( saved.size(), 1u );
+   BOOST_CHECK_EQUAL( saved[0]["endpoint"].as_string(), "[2a09:5302:ffff::d5a]:1776" );
+
+   // peers_v6.json of an earlier build, with a NAT64 record
+   std::vector<net::potential_peer_record> old_records{ net::potential_peer_record( nat64 ),
+                                                        net::potential_peer_record( v6 ) };
+   fc::json::save_to_file( old_records, v6_file );
+   net::peer_database reopened;
+   reopened.open( db_file );
+   BOOST_CHECK_EQUAL( reopened.size(), 1u );
+   BOOST_CHECK( !reopened.lookup_entry_for_endpoint( nat64 ) );
    BOOST_CHECK( reopened.lookup_entry_for_endpoint( v6 ) );
    reopened.close();
 }

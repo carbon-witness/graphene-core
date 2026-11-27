@@ -5,7 +5,7 @@
 //! the node reads them at every start; a running node also gets them at once through network_node.add_node.
 //! A "seed-nodes = [...]" entry in config.ini replaces the built-in list.
 
-use std::net::ToSocketAddrs;
+use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use std::path::Path;
 
 const SEED_NODES_TXT: &str = include_str!("../../libraries/egenesis/seed-nodes.txt");
@@ -56,9 +56,27 @@ pub fn is_valid(addr: &str) -> bool {
 
 /// The endpoints a seed resolves to, IPv4 and IPv6, as the node writes them: "1.2.3.4:1776",
 /// "[2001:db8::1]:1776". A seed with only an AAAA record (ipv6seed...) resolves where the system has IPv6.
+/// As the node does, without NAT64 addresses where IPv4 works (see without_nat64).
 pub fn resolve(addr: &str) -> Vec<String> {
     let Some(addr) = host_and_port(addr) else { return Vec::new() };
-    addr.to_socket_addrs().map(|it| it.map(|a| a.to_string()).collect()).unwrap_or_default()
+    let found: Vec<SocketAddr> = addr.to_socket_addrs().map(|it| it.collect()).unwrap_or_default();
+    // IPv4 works when the system has a route to the seed's IPv4 address; a UDP "connect" only picks the route
+    let ipv4_works = found.iter().find(|a| a.is_ipv4()).is_some_and(|v4| {
+        UdpSocket::bind("0.0.0.0:0").and_then(|s| s.connect(v4)).is_ok()
+    });
+    without_nat64(found, ipv4_works).iter().map(|a| a.to_string()).collect()
+}
+
+/// 64:ff9b::/96: an IPv4 address behind the network operator's NAT64 gateway, which a DNS64 resolver gives
+/// for every A record. Not a global IPv6 address of the seed, so dropped when the seed has an IPv4 address
+/// and IPv4 works; on an IPv6-only network it is the only way and is kept.
+fn without_nat64(found: Vec<SocketAddr>, ipv4_works: bool) -> Vec<SocketAddr> {
+    let is_nat64 = |a: &SocketAddr| matches!(a, SocketAddr::V6(v6) if v6.ip().segments()[..6] == [0x64, 0xff9b, 0, 0, 0, 0]);
+    if ipv4_works && found.iter().any(SocketAddr::is_ipv4) {
+        found.into_iter().filter(|a| !is_nat64(a)).collect()
+    } else {
+        found
+    }
 }
 
 /// The value of an active (not commented out) "key = value" line of config.ini
@@ -198,5 +216,16 @@ mod tests {
         // the node lists an IPv6 peer the same way
         assert_eq!(resolve("[2001:db8::1]:1776"), vec!["[2001:db8::1]:1776".to_string()]);
         assert_eq!(resolve("tls://1.2.3.4:1776?sni=a.org"), vec!["1.2.3.4:1776".to_string()]);
+    }
+
+    #[test]
+    fn drops_nat64_where_ipv4_works() {
+        let a = |s: &str| s.parse::<SocketAddr>().unwrap();
+        let (v4, nat64, v6) = (a("139.28.170.7:1776"), a("[64:ff9b::8b1c:aa07]:1776"), a("[2a09:5302:ffff::d5a]:1776"));
+        assert_eq!(without_nat64(vec![nat64, v4, v6], true), vec![v4, v6]);
+        // an IPv6-only network
+        assert_eq!(without_nat64(vec![nat64, v4], false), vec![nat64, v4]);
+        // nothing to replace it with
+        assert_eq!(without_nat64(vec![nat64], true), vec![nat64]);
     }
 }

@@ -153,7 +153,11 @@ endpoints but comes from a private address (e.g. Docker passing IPv6 connections
 ### Seed nodes
 
 - An IPv6 seed is given in brackets: `[2001:db8::1]:1776`, also `tls://[2001:db8::1]:1776?sni=name`.
-- A seed host name resolves to its A and AAAA records.
+- A seed host name resolves to its A and AAAA records. A DNS64 resolver (mobile networks) adds a NAT64 address
+  `64:ff9b::a.b.c.d` for every A record: it is not a global IPv6 address of the seed but the way to its IPv4 one
+  through the operator's gateway, so where IPv4 works the node connects to the IPv4 address and drops the NAT64 one;
+  on an IPv6-only network the NAT64 address is kept. The app's seed list does the same. The peer database does not
+  keep NAT64 addresses: on another network they lead nowhere.
 - `ipv6seed.graphene.carbon-witness.net` (an AAAA record only) joins the built-in seed list.
 - Fixed: the host of a seed was cut at the first colon, so for `[2001:db8::1]:1776` the string `[2001` went into TLS as
   the server name. An IP address, IPv4 or IPv6, is never sent as SNI.
