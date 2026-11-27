@@ -172,19 +172,18 @@ function renderStatus(s) {
 }
 
 // ---------- status bar and window title ----------
-// "witness_node 1.2.2-cea8e242 · GUI 1.0.1 · peers 3 (TLS 1) · IPv4 + IPv6 · P2P :1776"
+// "Graphene Node GUI 1.0.1 · witness_node 1.2.2-cea8e242 · peers 3 (TLS 1) · IPv4 + IPv6"
 let versions = [null, null]; // [gui, node]
 function renderStatusBar(s) {
   const [gui, node] = versions;
-  const parts = [node ? `witness_node ${node}` : t("status.node_unknown")];
-  if (gui) parts.push(`GUI ${gui}`);
+  const parts = [];
+  if (gui) parts.push(`Graphene Node GUI ${gui}`);
+  parts.push(node ? `witness_node ${node}` : t("status.node_unknown"));
   if (s && s.pid != null && s.peers) {
     parts.push(t("status.peers", { n: s.peers.length, tls: s.peers.filter((p) => p.transport.startsWith("TLS")).length }));
   }
-  if (s && s.pid != null && s.net) {
-    if (s.net.ipv6_usable != null) parts.push(t(s.net.ipv6_usable ? "status.ipv4_ipv6" : "status.ipv6_off"));
-    if (s.net.p2p_port) parts.push(t("status.p2p", { port: s.net.p2p_port }));
-  }
+  if (s && s.pid != null && s.net && s.net.ipv6_usable != null)
+    parts.push(t(s.net.ipv6_usable ? "status.ipv4_ipv6" : "status.ipv6_off"));
   $("statusbar").textContent = parts.join(" · ");
 }
 

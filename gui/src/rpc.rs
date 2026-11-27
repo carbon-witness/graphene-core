@@ -151,8 +151,6 @@ impl Peer {
 /// The node's own P2P side, from network_node.get_info, for the status bar
 #[derive(Clone, Debug, Default, serde::Serialize)]
 pub struct NetInfo {
-    /// The port the node listens on for P2P connections
-    pub p2p_port: Option<u16>,
     /// Whether the node has a working IPv6 address; None for a node before 1.2.2, which does not say
     pub ipv6_usable: Option<bool>,
 }
@@ -162,9 +160,7 @@ pub fn net_info(rpc: &mut Rpc) -> Result<NetInfo, String> {
 }
 
 fn parse_net_info(v: &Value) -> NetInfo {
-    // "0.0.0.0:1776" or "[::]:1776"
-    let p2p_port = v.get("listening_on").and_then(Value::as_str).and_then(|s| s.rsplit(':').next()?.parse().ok());
-    NetInfo { p2p_port, ipv6_usable: v.get("ipv6_usable").and_then(Value::as_bool) }
+    NetInfo { ipv6_usable: v.get("ipv6_usable").and_then(Value::as_bool) }
 }
 
 /// An endpoint the node knows of, from network_node.get_potential_peers
@@ -341,10 +337,10 @@ mod tests {
     #[test]
     fn reads_net_info() {
         let n = parse_net_info(&json!({"listening_on": "[::]:1776", "ipv6_usable": true}));
-        assert_eq!((n.p2p_port, n.ipv6_usable), (Some(1776), Some(true)));
+        assert_eq!(n.ipv6_usable, Some(true));
         // a node before 1.2.2
         let n = parse_net_info(&json!({"listening_on": "0.0.0.0:63594"}));
-        assert_eq!((n.p2p_port, n.ipv6_usable), (Some(63594), None));
+        assert_eq!(n.ipv6_usable, None);
     }
 
     #[test]

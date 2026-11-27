@@ -111,7 +111,7 @@ struct Inner {
     /// The app's API password for the running node; None when it has no account for the app
     rpc_password: Option<String>,
     peers: Option<Vec<Peer>>,
-    /// The node's P2P port and IPv6 state, for the status bar
+    /// The node's IPv6 state, for the status bar
     net: Option<NetInfo>,
     /// Every endpoint the node knows of, with its last connection attempt
     potential: Option<Vec<PotentialPeer>>,
@@ -144,7 +144,7 @@ pub struct Status {
     pub synced: bool,
     /// Connected P2P peers; None when the list is not available (see peers_note)
     pub peers: Option<Vec<Peer>>,
-    /// The node's P2P port and IPv6 state; None until the API answers after a login
+    /// The node's IPv6 state; None until the API answers after a login
     pub net: Option<NetInfo>,
     /// The built-in seeds, then the ones the user added
     pub seeds: Vec<SeedStatus>,
@@ -417,7 +417,7 @@ impl Supervisor {
                     (Ok(_), Some(r)) if logged_in => Some(rpc::peers(r)),
                     _ => None,
                 };
-                // The listening port and the IPv6 state change rarely: every 10 s
+                // The IPv6 state changes rarely: every 10 s
                 let net = match (&result, rpc.as_mut()) {
                     (Ok(_), Some(r)) if logged_in && round % 5 == 1 => rpc::net_info(r).ok(),
                     _ => None,

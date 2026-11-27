@@ -166,6 +166,5 @@
   "status.peers": "peers {n} (TLS {tls})",
   "status.ipv4_ipv6": "IPv4 + IPv6",
   "status.ipv6_off": "IPv4, no IPv6",
-  "status.p2p": "P2P :{port}",
   "status.node_unknown": "witness_node —"
 }
