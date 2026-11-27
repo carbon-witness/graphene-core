@@ -257,12 +257,19 @@ function renderSeeds(s) {
   }));
 }
 
+function seedError(text) {
+  $("seed-error").textContent = text || "";
+  $("seed-error").classList.toggle("hidden", !text);
+}
 $("seed-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const addr = $("seed-addr").value.trim();
-  await call("add_seed", { addr });
+  // Shown under the field, not in the alert at the top, which may be scrolled out of sight
+  try { await invoke("add_seed", { addr }); } catch (err) { seedError(String(err)); return; }
+  seedError("");
   $("seed-addr").value = "";
 });
+$("seed-addr").addEventListener("input", () => seedError(""));
 
 $("btn-start").onclick = () => invoke("node_start").catch(() => {}); // a failure opens an error box
 $("btn-stop").onclick = () => call("node_stop");
@@ -398,15 +405,12 @@ async function loadSettings() {
   return s;
 }
 
-// "Graphene Node GUI 1.0.1 · witness_node 1.2.2-cea8e242": on the settings page, in the window title and
-// in the status bar
+// "Graphene Node GUI 1.0.1 · witness_node 1.2.2-cea8e242": in the window title and in the status bar
 async function showVersions() {
   versions = await invoke("get_versions").catch(() => [null, null]);
   const [gui, node] = versions;
   if (!gui) return;
-  const text = t("about.versions", { gui, node: node || "—" });
-  $("versions").textContent = text;
-  window.__TAURI__.window.getCurrentWindow().setTitle(text).catch(() => {});
+  window.__TAURI__.window.getCurrentWindow().setTitle(t("about.versions", { gui, node: node || "—" })).catch(() => {});
   renderStatusBar(status);
 }
 form.rpc_endpoint.addEventListener("input", () => $("rpc-warning").classList.toggle("hidden", rpcIsLocal(form.rpc_endpoint.value)));
@@ -434,7 +438,7 @@ form.addEventListener("submit", async (e) => {
 });
 
 // ---------- zoom ----------
-// [+] 100% [-] in the status bar and Ctrl +, Ctrl -, Ctrl 0, as in a browser. The webview's own zoom keys are off
+// [-] 100% [+] in the status bar and Ctrl +, Ctrl -, Ctrl 0, as in a browser. The webview's own zoom keys are off
 // (zoomHotkeysEnabled is false by default), so the figure in the status bar is always the real one.
 // Kept in the webview's storage, so the window opens at the last zoom.
 const ZOOM_STEPS = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200];

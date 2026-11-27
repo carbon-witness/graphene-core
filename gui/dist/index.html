@@ -86,6 +86,7 @@
       <button class="primary" type="submit" data-i18n="seeds.add">Add seed</button>
       <span class="hint" data-i18n="seeds.hint"></span>
     </form>
+    <div id="seed-error" class="field-error hidden"></div>
     <table id="seed-table" class="blocks peers">
       <thead><tr>
         <th data-i18n="col.seed">Seed</th><th data-i18n="col.ip">IP</th><th data-i18n="col.source">Source</th>
@@ -119,15 +120,14 @@
       <p class="hint" data-i18n="settings.hint"></p>
       <div><button class="primary" type="submit" data-i18n="settings.save">Save</button> <span id="saved" class="hint"></span></div>
     </form>
-    <p class="hint versions" id="versions"></p>
   </section>
 </main>
 <footer class="statusbar">
   <span id="statusbar"></span>
   <span class="zoom">
-    <button id="zoom-in" data-i18n-title="zoom.in" title="Zoom in (Ctrl +)">+</button>
-    <button id="zoom-reset" data-i18n-title="zoom.reset" title="Actual size (Ctrl 0)">100%</button>
     <button id="zoom-out" data-i18n-title="zoom.out" title="Zoom out (Ctrl −)">−</button>
+    <button id="zoom-reset" data-i18n-title="zoom.reset" title="Actual size (Ctrl 0)">100%</button>
+    <button id="zoom-in" data-i18n-title="zoom.in" title="Zoom in (Ctrl +)">+</button>
   </span>
 </footer>
 <script src="app.js"></script>

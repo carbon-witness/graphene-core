@@ -95,7 +95,7 @@ failed* or *not tried yet*. Hover over a failed status to see why.
 
 **Add seed** adds a node by `host:port`, an IPv6 address in brackets (`[2001:db8::1]:1776`), or as
 `tls://host:port` to connect over TLS right away, with `?sni=name` for a host given as an IP address. It is written to
-`config.ini` in the data folder as `seed-node = …` and passed to the running node at once; the running node gets only
+`config.ini` in the data folder as `seed-node = …` and passed to the running node at once (an address it does not take is explained under the field); the running node gets only
 the address, so `tls://` and `sni` take effect at its next start (until then it tries TLS anyway and falls back to plain
 for an old node). Seeds added this way have a **remove** link.
 
@@ -108,8 +108,8 @@ peer's head. The node keeps up to 20 connections; how many it gets depends on ho
 
 The bar at the bottom of the window shows the app's version, the node's build, the number of peers and how many of them
 are under TLS, and whether the node has a working IPv6 address:
-`Graphene Node GUI 1.0.1 · witness_node 1.2.2-… · peers 3 (TLS 1) · IPv4 + IPv6`. At its right, **+**, the zoom
-and **−** scale the window, as do Ctrl +, Ctrl − and Ctrl 0 (actual size); the window opens at the last zoom. The window title is
+`Graphene Node GUI 1.0.1 · witness_node 1.2.2-… · peers 3 (TLS 1) · IPv4 + IPv6`. At its right, **−**, the zoom
+and **+** scale the window, as do Ctrl +, Ctrl − and Ctrl 0 (actual size); the window opens at the last zoom. The window title is
 "Graphene Node GUI 1.0.1 · witness_node 1.2.2-…", also in the taskbar.
 
 ### Settings
@@ -124,8 +124,8 @@ and **−** scale the window, as do Ctrl +, Ctrl − and Ctrl 0 (actual size); t
   the app then starts in the tray, without its window.
 * **Language**: English or Russian.
 
-At the bottom: the app's version and the node's build ("Graphene Node GUI 1.0.1 · witness_node 1.2.2-…"), which is
-also on the "Details" tab of each file's properties.
+The app's version and the node's build are in the window title and the status bar, and on the "Details" tab of each
+file's properties.
 
 ![Versions in the file properties](images/windows-gui/09-file-properties.png)
 
