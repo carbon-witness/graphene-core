@@ -1422,7 +1422,7 @@ namespace graphene { namespace net { namespace detail {
       user_data["platform"] = "osx";
 #elif defined( __linux__ )
       user_data["platform"] = "linux";
-#elif defined( _MSC_VER )
+#elif defined( _WIN32 )   // MSVC and MinGW (the Windows build is MinGW, which has no _MSC_VER)
       user_data["platform"] = "win32";
 #else
       user_data["platform"] = "other";
