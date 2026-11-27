@@ -937,6 +937,7 @@ namespace graphene { namespace net { namespace detail {
         fc::time_point active_disconnect_threshold = fc::time_point::now() - fc::seconds(active_disconnect_timeout);
         fc::time_point active_send_keepalive_threshold = fc::time_point::now() - fc::seconds(active_send_keepalive_timeout);
         fc::time_point active_ignored_request_threshold = fc::time_point::now() - active_ignored_request_timeout;
+        fc::time_point sync_item_ids_threshold = fc::time_point::now() - fc::seconds(GRAPHENE_NET_SYNC_ITEM_IDS_TIMEOUT);
         for( const peer_connection_ptr& active_peer : _active_connections )
         {
           if( active_peer->connection_initiation_time < active_disconnect_threshold &&
@@ -958,7 +959,7 @@ namespace graphene { namespace net { namespace detail {
             }
             if (!disconnect_due_to_request_timeout &&
                 active_peer->item_ids_requested_from_peer &&
-                active_peer->item_ids_requested_from_peer->get<1>() < active_ignored_request_threshold)
+                active_peer->item_ids_requested_from_peer->get<1>() < sync_item_ids_threshold)
               {
                 wlog("Disconnecting peer ${peer} because they didn't respond to my request for sync item ids after ${synopsis}",
                       ("peer", active_peer->get_remote_endpoint())

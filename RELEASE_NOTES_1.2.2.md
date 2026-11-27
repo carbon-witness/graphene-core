@@ -191,6 +191,9 @@ the host network, the bridge network with and without IPv6, and Docker Desktop.
   "unable to check"; a connection to `0.0.0.0` reaches the helper itself on Linux. The answer "unable to check" was built
   but never sent. A successful check put the endpoint of the helper, not of the checked node, into the peer database.
 - An inbound endpoint `0.0.0.0` from a hello is not taken as the address of the peer.
+- **Sync from a distant peer:** a peer that did not answer `fetch_blockchain_item_ids` within 1 second was
+  disconnected, so during sync over a long route (RTT ~250 ms) the only good peer was dropped and reconnected every
+  10–30 seconds. The answer now has 5 seconds (`GRAPHENE_NET_SYNC_ITEM_IDS_TIMEOUT`); blocks and transactions keep 1 second.
 
 ## CI
 

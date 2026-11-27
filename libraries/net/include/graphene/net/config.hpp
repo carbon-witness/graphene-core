@@ -71,6 +71,15 @@
 
 #define GRAPHENE_NET_PEER_HANDSHAKE_INACTIVITY_TIMEOUT       5
 
+/**
+ * How long to wait for a peer to answer fetch_blockchain_item_ids before
+ * disconnecting it. Block and transaction requests keep the 1-second timeout,
+ * but during sync the answer queues behind the blocks already in flight, so on
+ * a distant peer (RTT ~250 ms) one second is not enough and the only good peer
+ * is dropped and reconnected every 10-30 seconds.
+ */
+#define GRAPHENE_NET_SYNC_ITEM_IDS_TIMEOUT                   5 // seconds
+
 #define GRAPHENE_NET_PEER_DISCONNECT_TIMEOUT                 20
 
 /* uncomment next line to use testnet seed ip and port */
