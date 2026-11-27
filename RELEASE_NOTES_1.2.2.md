@@ -270,6 +270,11 @@ the host network, the bridge network with and without IPv6, and Docker Desktop.
 - **Mainnet has no other IPv6 nodes yet.** IPv6 helps once more nodes run 1.2.2: until then the node talks to the
   network over IPv4, as before.
 - `get_current_connections_reply` (a diagnostic message) still carries IPv6 peers as `0.0.0.0`.
+- **A restart right after a network failure can wait for the port.** Before listening the node checks that no other
+  program holds its P2P port, with a socket without `SO_REUSEADDR`; its outbound connections go out from the same
+  port. When the node stopped while its network was down, the closing connections stay for up to about two minutes,
+  and the new process waits for them (`Still waiting for port …`), with neither P2P nor RPC meanwhile. A normal
+  restart does not wait. As in earlier releases.
 
 ## Components
 
