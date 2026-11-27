@@ -285,8 +285,12 @@ namespace graphene { namespace net
             // connections stay in FIN_WAIT for minutes (nobody answers the FIN), so the node could
             // not reconnect to any of the peers it had just lost all at once.
             // If the TCP connection was never established, retry once from a port the OS picks.
-            // Failures after the TCP connect (in the key exchange) are not retried.
-            if( !bound_to_local_endpoint || retried_without_bind || tcp_connection_established() )
+            // Failures after the TCP connect (in the key exchange) are not retried, nor a connect
+            // that failed because we closed the connection ourselves: the node has already dropped
+            // the peer (e.g. no answer within the handshake timeout), and a retried connection would
+            // belong to no one and stay open for ever.
+            if( !bound_to_local_endpoint || retried_without_bind || tcp_connection_established() ||
+                negotiation_status == connection_negotiation_status::closing )
               throw;
             wlog( "Failed to connect to ${remote_endpoint} from local endpoint ${local_endpoint}, retrying from an OS-selected endpoint: ${except}",
                   ("remote_endpoint", remote_endpoint)("local_endpoint", *local_endpoint)("except", except.to_string()) );

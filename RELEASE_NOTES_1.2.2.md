@@ -169,7 +169,9 @@ seed-node = tls://1.2.3.4:1776?sni=example.org
 - **Retry from an OS-selected port.** The node binds its outbound connections to its listening port. While an earlier
   connection between the same two endpoints is still in TIME_WAIT or FIN_WAIT, `connect()` fails with "Cannot assign
   requested address" (EADDRNOTAVAIL). After losing all of its peers at once the node could reconnect to none of them.
-  A connection that fails before the TCP connect is now retried once from a port the OS picks.
+  A connection that fails before the TCP connect is now retried once from a port the OS picks. A connect that the node
+  aborted itself (the peer gave no answer within the handshake timeout) is not retried: such a retried connection
+  belonged to no peer and stayed open (seen on Windows: one more socket every 30 seconds for each unresponsive peer).
 - **The retry delay is capped.** It was (failed attempts + 1) × 30 s, and the count was never reset, so a peer that
   had failed a few hundred times over weeks was retried every one to two and a half hours. The count is reset after a
   successful handshake, and the multiplier is capped at 11: every peer is retried at least every 5.5 minutes.
