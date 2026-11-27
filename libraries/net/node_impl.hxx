@@ -417,6 +417,8 @@ class node_impl : public peer_connection_delegate
       /// whether a connection to another endpoint of the same node makes this one unnecessary
       bool is_connected_at_alternate_endpoint(const potential_peer_record& record);
       void remember_listen_endpoints(const peer_connection* peer);
+      /// an address we connected to turned out to be a node we are connected to at another one
+      void remember_duplicate_endpoint(const peer_connection* peer, const node_id_t& node_id);
       void parse_hello_user_data_for_peer( peer_connection* originating_peer, const fc::variant_object& user_data );
 
       void on_message( peer_connection* originating_peer,

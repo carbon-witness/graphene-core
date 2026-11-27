@@ -1767,6 +1767,8 @@ namespace graphene { namespace net { namespace detail {
           dlog("Received a hello_message from peer ${peer} that I'm already connected to (with id ${id}), rejection",
                ("peer", originating_peer->get_remote_endpoint())
                ("id", originating_peer->node_id));
+          if (_node_id != peer_node_id)
+            remember_duplicate_endpoint(originating_peer, peer_node_id);
         }
 #ifdef ENABLE_P2P_DEBUGGING_API
         else if(!_allowed_peers.empty() &&
@@ -4957,6 +4959,33 @@ namespace graphene { namespace net { namespace detail {
         return true;
       }
       return false;
+    }
+
+    void node_impl::remember_duplicate_endpoint(const peer_connection* peer, const node_id_t& node_id)
+    {
+      VERIFY_CORRECT_THREAD();
+      // We connected to an address and found a node we are already connected to at another one: a
+      // port forwarded to the node that the node itself does not know of (HK publishes 1776 and an
+      // old port), so it is not among the endpoints it lists in its hello. The signed hello proves
+      // it is the same node; without a note the connect loop would retry this address every
+      // 30 seconds for as long as the other connection lasts.
+      if (peer->direction != peer_connection_direction::outbound)
+        return;
+      fc::optional<fc::ip::any_endpoint> endpoint = peer->get_endpoint_for_connecting();
+      peer_connection_ptr connected = get_peer_by_node_id(node_id);
+      if (!endpoint || !connected || connected.get() == peer)
+        return;
+      fc::optional<fc::ip::any_endpoint> connected_endpoint = connected->get_endpoint_for_connecting();
+      if (!connected_endpoint || *connected_endpoint == *endpoint)
+        return;
+      potential_peer_record record = _potential_peer_db.lookup_or_create_entry_for_endpoint(*endpoint);
+      if (std::find(record.alternate_endpoints.begin(), record.alternate_endpoints.end(), *connected_endpoint) ==
+          record.alternate_endpoints.end())
+        record.alternate_endpoints.push_back(*connected_endpoint);
+      record.alternate_endpoints_confirmed = true;
+      _potential_peer_db.update_entry(record);
+      dlog("${endpoint} is node ${id}, connected at ${other}: not retried while that connection lasts",
+           ("endpoint", *endpoint)("id", node_id)("other", *connected_endpoint));
     }
 
     void node_impl::remember_listen_endpoints(const peer_connection* peer)
