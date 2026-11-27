@@ -93,8 +93,11 @@ itself.
 in `config.ini`. Each shows its status: *connected*, *was connected*, *connection failed*, *rejected us*, *handshake
 failed* or *not tried yet*. Hover over a failed status to see why.
 
-**Add seed** adds a node by `host:port`. It is written to `config.ini` in the data folder as `seed-node = host:port`
-and passed to the running node at once. Seeds added this way have a **remove** link.
+**Add seed** adds a node by `host:port`, an IPv6 address in brackets (`[2001:db8::1]:1776`), or as
+`tls://host:port` to connect over TLS right away, with `?sni=name` for a host given as an IP address. It is written to
+`config.ini` in the data folder as `seed-node = …` and passed to the running node at once; the running node gets only
+the address, so `tls://` and `sni` take effect at its next start (until then it tries TLS anyway and falls back to plain
+for an old node). Seeds added this way have a **remove** link.
 
 **Peers** are the nodes the node is connected to now, with their release and build. **Transport** is `TLSv1.3` for
 a connection under TLS (both nodes 1.2.2 or later) and `plain` otherwise; a dash for a node before 1.2.2. **Last block**

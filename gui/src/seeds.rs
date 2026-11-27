@@ -23,8 +23,27 @@ pub fn defaults() -> Vec<String> {
         .collect()
 }
 
-/// "host:port" with a non-empty host and a port from 1 to 65535.
+/// The "host:port" part of a seed, which may also be written as tls://host:port (TLS right away) with
+/// ?sni=name (the name to send in TLS), as the node reads it (parse_seed_node_address in application.cpp).
+/// None for another parameter after "?", which the node rejects.
+pub fn host_and_port(addr: &str) -> Option<&str> {
+    let addr = addr.trim();
+    let rest = match addr.get(..6) {
+        Some(scheme) if scheme.eq_ignore_ascii_case("tls://") => &addr[6..],
+        _ => addr,
+    };
+    match rest.split_once('?') {
+        Some((hp, query)) => query
+            .split('&')
+            .all(|p| p.is_empty() || (p.len() > 4 && p.get(..4).is_some_and(|k| k.eq_ignore_ascii_case("sni="))))
+            .then_some(hp),
+        None => Some(rest),
+    }
+}
+
+/// host:port with a non-empty host and a port from 1 to 65535, optionally as tls://host:port?sni=name.
 pub fn is_valid(addr: &str) -> bool {
+    let Some(addr) = host_and_port(addr) else { return false };
     match addr.rsplit_once(':') {
         Some((host, port)) => {
             !host.is_empty()
@@ -38,6 +57,7 @@ pub fn is_valid(addr: &str) -> bool {
 /// The endpoints a seed resolves to, IPv4 and IPv6, as the node writes them: "1.2.3.4:1776",
 /// "[2001:db8::1]:1776". A seed with only an AAAA record (ipv6seed...) resolves where the system has IPv6.
 pub fn resolve(addr: &str) -> Vec<String> {
+    let Some(addr) = host_and_port(addr) else { return Vec::new() };
     addr.to_socket_addrs().map(|it| it.map(|a| a.to_string()).collect()).unwrap_or_default()
 }
 
@@ -164,6 +184,12 @@ mod tests {
         assert!(!is_valid("1.2.3.4:70000"));
         assert!(!is_valid(":1776"));
         assert!(!is_valid("http://x:1"));
+        assert!(is_valid("tls://seed.example.org:1776"));
+        assert!(is_valid("TLS://1.2.3.4:1776?sni=seed.example.org"));
+        assert!(is_valid("tls://[2001:db8::1]:1776"));
+        assert!(!is_valid("tls://1.2.3.4:1776?foo=bar"));
+        assert!(!is_valid("tls://1.2.3.4"));
+        assert_eq!(host_and_port("tls://1.2.3.4:1776?sni=a.org"), Some("1.2.3.4:1776"));
     }
 
     #[test]
@@ -171,5 +197,6 @@ mod tests {
         assert_eq!(resolve("1.2.3.4:1776"), vec!["1.2.3.4:1776".to_string()]);
         // the node lists an IPv6 peer the same way
         assert_eq!(resolve("[2001:db8::1]:1776"), vec!["[2001:db8::1]:1776".to_string()]);
+        assert_eq!(resolve("tls://1.2.3.4:1776?sni=a.org"), vec!["1.2.3.4:1776".to_string()]);
     }
 }

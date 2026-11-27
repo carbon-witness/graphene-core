@@ -49,6 +49,7 @@ The app is **Graphene Node GUI 1.0.1** (was 1.0.0):
 - Zoom: [+] 100% [-] at the right of the status bar, and Ctrl +, Ctrl −, Ctrl 0; the window opens at the last zoom.
 - A seed resolves to its IPv6 addresses too: `ipv6seed.graphene.carbon-witness.net` (an AAAA record only) showed
   "name not resolved" although the node was connected to it.
+- **Add seed** takes `tls://host:port` and `?sni=name`, as `seed-node` does; it took only `host:port`.
 
 The Windows node told its peers `platform: other`: the platform was detected by `_MSC_VER`, and the build is MinGW. It
 now says `win32` (with `bitness: 64`), as MSVC builds did.
